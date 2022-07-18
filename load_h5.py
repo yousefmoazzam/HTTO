@@ -2,6 +2,9 @@ from mpi4py import MPI
 import h5py as h5
 import argparse
 import math
+import pandas as pd
+import os
+from pathlib import Path
 
 
 def __option_parser():
@@ -9,6 +12,7 @@ def __option_parser():
     parser.add_argument("in_file", help="Input data file.")
     #parser.add_argument("out_folder", help="Output folder.")
     parser.add_argument("-p", "--path", help="Data path", default="/entry1/tomo_entry/data/data")
+    parser.add_argument("-c", "--csv", help="Write read information to specified csv file", default=None)
     args = parser.parse_args()
     return args
 
@@ -93,6 +97,8 @@ def main():
     rank = MPI.COMM_WORLD.rank
     nproc = MPI.COMM_WORLD.size
 
+    filename = args.in_file.split("/")[-1]
+
     with h5.File(args.in_file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
         size = in_file[args.path].size
         chunks = in_file[args.path].chunks
@@ -110,8 +116,11 @@ def main():
         tstart_c = MPI.Wtime()
         nchunks = read_chunks(args, rank, nproc)
         tstop_c = MPI.Wtime()
+        time_c = tstop_c - tstart_c
         if rank == 0:
             print(f"{nchunks} chunks read in {tstop_c - tstart_c} seconds.")
+    else:
+        time_c = None
 
     MPI.COMM_WORLD.Barrier()
     tstart_p = MPI.Wtime()
@@ -133,7 +142,26 @@ def main():
     tstop_t = MPI.Wtime()
     if rank == 0:
         print(f"{shape[0]} tangentograms read in {tstop_t - tstart_t} seconds.")
-        
+
+    times_dict = {"filename": filename,
+                  "data_path": args.path,
+                  "nproc": nproc,
+                  "size": size,
+                  "shape": str(shape),
+                  "chunks": str(chunks),
+                  "chunks_time(s)": time_c,
+                  "projections_time(s)": tstop_p - tstart_p,
+                  "sinograms_time(s)": tstop_s - tstart_s,
+                  "tangentograms_time(s)": tstop_t - tstart_t}
+
+    csv_path = args.csv
+    if rank == 0:
+        if csv_path is not None:
+            times_df = pd.DataFrame(times_dict, index=[0])
+            times_df.to_csv(csv_path, mode="a", header=not os.path.exists(csv_path))
+            print(f"Output written to {csv_path}")
+
+
 
 if __name__ == '__main__':
     main()
