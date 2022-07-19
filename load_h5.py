@@ -1,7 +1,7 @@
 """
 Parallel HDF5 load/read.
 
-Splits data between process in different ways.
+Splits data between processes in different ways.
 Collects time taken to read data in each of these ways.
 
 Usage:
