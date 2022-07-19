@@ -2,10 +2,11 @@
 Parallel HDF5 load/read.
 
 Splits data between processes in different ways.
-Collects time taken to read data in each of these ways.
+Prints and/or collects time taken to read data in each of these ways.
 
 Usage:
-mpirun -np 4 python load_h5.py /path/to/datafile.h5 -c /path/to/csvfile.csv -r <no. repeats>
+mpirun -np 4 python load_h5.py /path/to/datafile.h5 -p /entry/data -c /path/to/csvfile.csv -r 5
+-p - path to dataset within data file. /entry1/tomo_entry/data/data by default.
 -c - add results to a csv file (will create if file doesn't exist).
 -r - repeat multiple times.
 
@@ -26,7 +27,7 @@ def __option_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("in_file", help="Input data file.")
     parser.add_argument("-p", "--path", default="/entry1/tomo_entry/data/data", help="Data path")
-    parser.add_argument("-c", "--csv", default=None, help="Write read information to specified csv file")
+    parser.add_argument("-c", "--csv", default=None, help="Write results to specified csv file")
     parser.add_argument("-r", "--repeat", type=int, default=1, help="Number of repeats.")
     args = parser.parse_args()
     return args
