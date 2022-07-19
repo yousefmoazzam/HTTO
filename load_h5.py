@@ -4,15 +4,15 @@ import argparse
 import math
 import pandas as pd
 import os
-from pathlib import Path
+from datetime import datetime
 
 
 def __option_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("in_file", help="Input data file.")
-    #parser.add_argument("out_folder", help="Output folder.")
-    parser.add_argument("-p", "--path", help="Data path", default="/entry1/tomo_entry/data/data")
-    parser.add_argument("-c", "--csv", help="Write read information to specified csv file", default=None)
+    parser.add_argument("-p", "--path", default="/entry1/tomo_entry/data/data", help="Data path")
+    parser.add_argument("-c", "--csv", default=None, help="Write read information to specified csv file")
+    parser.add_argument("-r", "--repeat", type=int, default=1, help="Number of repeats.")
     args = parser.parse_args()
     return args
 
@@ -105,62 +105,92 @@ def main():
         shape = in_file[args.path].shape
         compression = in_file[args.path].compression
     if rank == 0:
+        print()
+        if args.repeat == 1:
+            print(f"Reading {filename}")
+        else:
+            print(f"Reading {filename} {args.repeat} times")
         print(f"Number of processes: {nproc}")
         print(f"Dataset size = {size}")
         print(f"Dataset shape = {shape}")
         print(f"Chunk size = {chunks}")
         print(f"Compression = {compression}")
-    
-    MPI.COMM_WORLD.Barrier()
-    if chunks is not None:
-        tstart_c = MPI.Wtime()
-        nchunks = read_chunks(args, rank, nproc)
-        tstop_c = MPI.Wtime()
-        time_c = tstop_c - tstart_c
+        print()
+
+    times_dict = {"file name": [None] * args.repeat,
+                  "data path": [None] * args.repeat,
+                  "nproc": [None] * args.repeat,
+                  "size": [None] * args.repeat,
+                  "shape": [None] * args.repeat,
+                  "chunks": [None] * args.repeat,
+                  "chunks time (s)": [None] * args.repeat,
+                  "projections time (s)": [None] * args.repeat,
+                  "sinograms time (s)": [None] * args.repeat,
+                  "tangentograms time (s)": [None] * args.repeat,
+                  "date/time": [None] * args.repeat}
+
+    for repeat in range(args.repeat):
+
+        # Reading chunks
+        MPI.COMM_WORLD.Barrier()
+        if chunks is not None:
+            tstart_c = MPI.Wtime()
+            nchunks = read_chunks(args, rank, nproc)
+            tstop_c = MPI.Wtime()
+            time_c = tstop_c - tstart_c
+            if rank == 0:
+                print(f"{nchunks} chunks read in {tstop_c - tstart_c} seconds.")
+        else:
+            time_c = None
+
+        # Reading along the 2nd dimension (projections)
+        MPI.COMM_WORLD.Barrier()
+        tstart_p = MPI.Wtime()
+        read_projections(args, rank, nproc)
+        tstop_p = MPI.Wtime()
         if rank == 0:
-            print(f"{nchunks} chunks read in {tstop_c - tstart_c} seconds.")
-    else:
-        time_c = None
+            print(f"{shape[2]} projections read in {tstop_p-tstart_p} seconds.")
 
-    MPI.COMM_WORLD.Barrier()
-    tstart_p = MPI.Wtime()
-    read_projections(args, rank, nproc)
-    tstop_p = MPI.Wtime()
-    if rank == 0:
-        print(f"{shape[2]} projections read in {tstop_p-tstart_p} seconds.")
+        # Reading along the 1st dimension (sinograms)
+        MPI.COMM_WORLD.Barrier()
+        tstart_s = MPI.Wtime()
+        read_sinograms(args, rank, nproc)
+        tstop_s = MPI.Wtime()
+        if rank == 0:
+            print(f"{shape[1]} sinograms read in {tstop_s - tstart_s} seconds.")
 
-    MPI.COMM_WORLD.Barrier()
-    tstart_s = MPI.Wtime()
-    read_sinograms(args, rank, nproc)
-    tstop_s = MPI.Wtime()
-    if rank == 0:
-        print(f"{shape[1]} sinograms read in {tstop_s - tstart_s} seconds.")
+        # Reading along the 0th dimension (tangentograms)
+        MPI.COMM_WORLD.Barrier()
+        tstart_t = MPI.Wtime()
+        read_tangentograms(args, rank, nproc)
+        tstop_t = MPI.Wtime()
+        if rank == 0:
+            print(f"{shape[0]} tangentograms read in {tstop_t - tstart_t} seconds.")
 
-    MPI.COMM_WORLD.Barrier()
-    tstart_t = MPI.Wtime()
-    read_tangentograms(args, rank, nproc)
-    tstop_t = MPI.Wtime()
-    if rank == 0:
-        print(f"{shape[0]} tangentograms read in {tstop_t - tstart_t} seconds.")
+        # Recording results in a dictionary
+        times_dict["file name"][repeat] = filename
+        times_dict["data path"][repeat] = args.path
+        times_dict["nproc"][repeat] = nproc
+        times_dict["size"][repeat] = size
+        times_dict["shape"][repeat] = str(shape)
+        times_dict["chunks"][repeat] = str(chunks)
+        times_dict["chunks times (s)"][repeat] = time_c
+        times_dict["projections times (s)"][repeat] = tstop_p - tstart_p
+        times_dict["sinograms times (s)"][repeat] = tstop_s - tstart_s
+        times_dict["tangentograms times (s)"][repeat] = tstop_t - tstart_t
+        times_dict["date/time"][repeat] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
-    times_dict = {"filename": filename,
-                  "data_path": args.path,
-                  "nproc": nproc,
-                  "size": size,
-                  "shape": str(shape),
-                  "chunks": str(chunks),
-                  "chunks_time(s)": time_c,
-                  "projections_time(s)": tstop_p - tstart_p,
-                  "sinograms_time(s)": tstop_s - tstart_s,
-                  "tangentograms_time(s)": tstop_t - tstart_t}
+        if rank == 0:
+            print()
 
+    # Writing results to csv file if option used
     csv_path = args.csv
     if rank == 0:
         if csv_path is not None:
-            times_df = pd.DataFrame(times_dict, index=[0])
+            times_df = pd.DataFrame(times_dict)
             times_df.to_csv(csv_path, mode="a", header=not os.path.exists(csv_path))
             print(f"Output written to {csv_path}")
-
+            print()
 
 
 if __name__ == '__main__':
