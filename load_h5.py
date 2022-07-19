@@ -174,10 +174,10 @@ def main():
         times_dict["size"][repeat] = size
         times_dict["shape"][repeat] = str(shape)
         times_dict["chunks"][repeat] = str(chunks)
-        times_dict["chunks times (s)"][repeat] = time_c
-        times_dict["projections times (s)"][repeat] = tstop_p - tstart_p
-        times_dict["sinograms times (s)"][repeat] = tstop_s - tstart_s
-        times_dict["tangentograms times (s)"][repeat] = tstop_t - tstart_t
+        times_dict["chunks time (s)"][repeat] = time_c
+        times_dict["projections time (s)"][repeat] = tstop_p - tstart_p
+        times_dict["sinograms time (s)"][repeat] = tstop_s - tstart_s
+        times_dict["tangentograms time (s)"][repeat] = tstop_t - tstart_t
         times_dict["date/time"][repeat] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
         if rank == 0:
