@@ -1,4 +1,4 @@
-,file name,data path,nproc,size,shape,chunks,chunks time (s),projections_time(s),sinograms time (s),tangentograms time (s),date/time
+,file name,data path,nproc,size,shape,chunks,chunks time (s),projections time (s),sinograms time (s),tangentograms time (s),date/time
 0,13076.nxs,/entry1/tomo_entry/data/data,4,3570142400,"(1861, 1199, 1600)","(64, 64, 1600)",1.498349749,4.162977079,3.824619593,7.81832316,19/07/2022 09:55:26
 1,13076.nxs,/entry1/tomo_entry/data/data,4,3570142400,"(1861, 1199, 1600)","(64, 64, 1600)",4.065672069,19.681463404,9.826582394,11.165388134,19/07/2022 09:56:11
 2,13076.nxs,/entry1/tomo_entry/data/data,4,3570142400,"(1861, 1199, 1600)","(64, 64, 1600)",3.691436002,18.732559764,8.71354439599999,8.86292772100001,19/07/2022 09:56:51
