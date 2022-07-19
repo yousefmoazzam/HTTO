@@ -1,3 +1,18 @@
+"""
+Parallel HDF5 load/read.
+
+Splits data between process in different ways.
+Collects time taken to read data in each of these ways.
+
+Usage:
+mpirun -np 4 python load_h5.py /path/to/datafile.h5 -c /path/to/csvfile.csv -r <no. repeats>
+-c - add results to a csv file (will create if file doesn't exist).
+-r - repeat multiple times.
+
+Author: Jacob Williamson
+
+"""
+
 from mpi4py import MPI
 import h5py as h5
 import argparse
