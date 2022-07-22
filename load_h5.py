@@ -26,9 +26,10 @@ from datetime import datetime
 def __option_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("in_file", help="Input data file.")
-    parser.add_argument("-p", "--path", default="/entry1/tomo_entry/data/data", help="Data path")
-    parser.add_argument("-c", "--csv", default=None, help="Write results to specified csv file")
+    parser.add_argument("-p", "--path", default="/entry1/tomo_entry/data/data", help="Data path.")
+    parser.add_argument("-c", "--csv", default=None, help="Write results to specified csv file.")
     parser.add_argument("-r", "--repeat", type=int, default=1, help="Number of repeats.")
+    parser.add_argument("-i", "--include", type=list, default=["c", "p", "s", "t"], help="Which slicing options to use.")
     args = parser.parse_args()
     return args
 
@@ -149,39 +150,51 @@ def main():
 
         # Reading chunks
         MPI.COMM_WORLD.Barrier()
-        if chunks is not None:
+        if chunks is not None and "c" in args.include:
             tstart_c = MPI.Wtime()
             nchunks = read_chunks(args, rank, nproc)
             tstop_c = MPI.Wtime()
             time_c = tstop_c - tstart_c
             if rank == 0:
-                print(f"{nchunks} chunks read in {tstop_c - tstart_c} seconds.")
+                print(f"{nchunks} chunks read in {time_c} seconds.")
         else:
             time_c = None
 
         # Reading along the 2nd dimension (projections)
         MPI.COMM_WORLD.Barrier()
-        tstart_p = MPI.Wtime()
-        read_projections(args, rank, nproc)
-        tstop_p = MPI.Wtime()
-        if rank == 0:
-            print(f"{shape[2]} projections read in {tstop_p-tstart_p} seconds.")
+        if "p" in args.include:
+            tstart_p = MPI.Wtime()
+            read_projections(args, rank, nproc)
+            tstop_p = MPI.Wtime()
+            time_p = tstop_p - tstart_p
+            if rank == 0:
+                print(f"{shape[2]} projections read in {time_p} seconds.")
+        else:
+            time_p = None
 
         # Reading along the 1st dimension (sinograms)
         MPI.COMM_WORLD.Barrier()
-        tstart_s = MPI.Wtime()
-        read_sinograms(args, rank, nproc)
-        tstop_s = MPI.Wtime()
-        if rank == 0:
-            print(f"{shape[1]} sinograms read in {tstop_s - tstart_s} seconds.")
+        if "s" in args.include:
+            tstart_s = MPI.Wtime()
+            read_sinograms(args, rank, nproc)
+            tstop_s = MPI.Wtime()
+            time_s = tstop_s - tstart_s
+            if rank == 0:
+                print(f"{shape[1]} sinograms read in {time_s} seconds.")
+        else:
+            time_s = None
 
         # Reading along the 0th dimension (tangentograms)
         MPI.COMM_WORLD.Barrier()
-        tstart_t = MPI.Wtime()
-        read_tangentograms(args, rank, nproc)
-        tstop_t = MPI.Wtime()
-        if rank == 0:
-            print(f"{shape[0]} tangentograms read in {tstop_t - tstart_t} seconds.")
+        if "t" in args.include:
+            tstart_t = MPI.Wtime()
+            read_tangentograms(args, rank, nproc)
+            tstop_t = MPI.Wtime()
+            time_t = tstop_t - tstart_t
+            if rank == 0:
+                print(f"{shape[0]} tangentograms read in {time_t} seconds.")
+        else:
+            time_t = None
 
         # Recording results in a dictionary
         times_dict["file name"][repeat] = filename
@@ -191,9 +204,9 @@ def main():
         times_dict["shape"][repeat] = str(shape)
         times_dict["chunks"][repeat] = str(chunks)
         times_dict["chunks time (s)"][repeat] = time_c
-        times_dict["projections time (s)"][repeat] = tstop_p - tstart_p
-        times_dict["sinograms time (s)"][repeat] = tstop_s - tstart_s
-        times_dict["tangentograms time (s)"][repeat] = tstop_t - tstart_t
+        times_dict["projections time (s)"][repeat] = time_p
+        times_dict["sinograms time (s)"][repeat] = time_s
+        times_dict["tangentograms time (s)"][repeat] = time_t
         times_dict["date/time"][repeat] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
         if rank == 0:
