@@ -29,36 +29,40 @@ def __option_parser():
     parser.add_argument("-p", "--path", default="/entry1/tomo_entry/data/data", help="Data path.")
     parser.add_argument("-c", "--csv", default=None, help="Write results to specified csv file.")
     parser.add_argument("-r", "--repeat", type=int, default=1, help="Number of repeats.")
-    parser.add_argument("-i", "--include", type=list, default=["c", "p", "s", "t"], help="Which slicing options to use.")
+    parser.add_argument("-i", "--include", type=list, default=["p"],
+                        help="Which slicing options to use (c, p, s, t).")
     args = parser.parse_args()
     return args
 
 
-def read_projections(args, rank, nproc):
+def read_through_dim3(args, rank, nproc):
     with h5.File(args.in_file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
         dataset = in_file[args.path]
         shape = dataset.shape
         i0 = round((shape[2] / nproc) * rank)
         i1 = round((shape[2] / nproc) * (rank + 1))
         proc_data = dataset[:, :, i0:i1]
+        return proc_data
 
 
-def read_sinograms(args, rank, nproc):
+def read_through_dim2(args, rank, nproc):
     with h5.File(args.in_file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
         dataset = in_file[args.path]
         shape = dataset.shape
         i0 = round((shape[1] / nproc) * rank)
         i1 = round((shape[1] / nproc) * (rank + 1))
         proc_data = dataset[:, i0:i1, :]
+        return proc_data
 
 
-def read_tangentograms(args, rank, nproc):
+def read_through_dim1(args, rank, nproc):
     with h5.File(args.in_file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
         dataset = in_file[args.path]
         shape = dataset.shape
         i0 = round((shape[0] / nproc) * rank)
         i1 = round((shape[0] / nproc) * (rank + 1))
         proc_data = dataset[i0:i1, :, :]
+        return proc_data
 
 
 def read_chunks(args, rank, nproc):
@@ -160,23 +164,23 @@ def main():
         else:
             time_c = None
 
-        # Reading along the 2nd dimension (projections)
+        # Reading along the 1st dimension (projections)
         MPI.COMM_WORLD.Barrier()
         if "p" in args.include:
             tstart_p = MPI.Wtime()
-            read_projections(args, rank, nproc)
+            read_through_dim1(args, rank, nproc)
             tstop_p = MPI.Wtime()
             time_p = tstop_p - tstart_p
             if rank == 0:
-                print(f"{shape[2]} projections read in {time_p} seconds.")
+                print(f"{shape[0]} projections read in {time_p} seconds.")
         else:
             time_p = None
 
-        # Reading along the 1st dimension (sinograms)
+        # Reading along the 2nd dimension (sinograms)
         MPI.COMM_WORLD.Barrier()
         if "s" in args.include:
             tstart_s = MPI.Wtime()
-            read_sinograms(args, rank, nproc)
+            read_through_dim2(args, rank, nproc)
             tstop_s = MPI.Wtime()
             time_s = tstop_s - tstart_s
             if rank == 0:
@@ -184,15 +188,15 @@ def main():
         else:
             time_s = None
 
-        # Reading along the 0th dimension (tangentograms)
+        # Reading along the 3rd dimension (tangentograms)
         MPI.COMM_WORLD.Barrier()
         if "t" in args.include:
             tstart_t = MPI.Wtime()
-            read_tangentograms(args, rank, nproc)
+            read_through_dim3(args, rank, nproc)
             tstop_t = MPI.Wtime()
             time_t = tstop_t - tstart_t
             if rank == 0:
-                print(f"{shape[0]} tangentograms read in {time_t} seconds.")
+                print(f"{shape[2]} tangentograms read in {time_t} seconds.")
         else:
             time_t = None
 
