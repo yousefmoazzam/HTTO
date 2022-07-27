@@ -35,39 +35,69 @@ def __option_parser():
     return args
 
 
-def read_through_dim3(file, path, comm):
+def read_through_dim3(file, path, comm, preview=":,:,:"):
     rank = comm.rank
     nproc = comm.size
+    slice_list = get_slice_list_from_preview(preview)
     with h5.File(file, "r", driver="mpio", comm=comm) as in_file:
         dataset = in_file[path]
-        shape = dataset.shape
-        i0 = round((shape[2] / nproc) * rank)
-        i1 = round((shape[2] / nproc) * (rank + 1))
-        proc_data = dataset[:, :, i0:i1]
+        if slice_list[2] == slice(None):
+            length = dataset.shape[2]
+            offset = 0
+            step = 1
+        else:
+            start = 0 if slice_list[2].start is None else slice_list[1].start
+            stop = dataset.shape[2] if slice_list[2].stop is None else slice_list[2].stop
+            step = dataset.shape[2] if slice_list[2].step is None else slice_list[2].step
+            length = (stop - start) // step
+            offset = start
+        i0 = round((length / nproc) * rank) + offset
+        i1 = round((length / nproc) * (rank + 1)) + offset
+        proc_data = dataset[:, :, i0:i1:step]
         return proc_data
 
 
-def read_through_dim2(file, path, comm):
+def read_through_dim2(file, path, comm, preview=":,:,:"):
     rank = comm.rank
     nproc = comm.size
+    slice_list = get_slice_list_from_preview(preview)
     with h5.File(file, "r", driver="mpio", comm=comm) as in_file:
         dataset = in_file[path]
-        shape = dataset.shape
-        i0 = round((shape[1] / nproc) * rank)
-        i1 = round((shape[1] / nproc) * (rank + 1))
-        proc_data = dataset[:, i0:i1, :]
+        if slice_list[1] == slice(None):
+            length = dataset.shape[1]
+            offset = 0
+            step = 1
+        else:
+            start = 0 if slice_list[1].start is None else slice_list[1].start
+            stop = dataset.shape[1] if slice_list[1].stop is None else slice_list[1].stop
+            step = dataset.shape[1] if slice_list[1].step is None else slice_list[1].step
+            length = (stop - start)//step
+            offset = start
+        i0 = round((length / nproc) * rank) + offset
+        i1 = round((length / nproc) * (rank + 1)) + offset
+        proc_data = dataset[:, i0:i1:step, :]
         return proc_data
 
 
-def read_through_dim1(file, path, comm):
+def read_through_dim1(file, path, comm, preview=":,:,:"):
     rank = comm.rank
     nproc = comm.size
+    slice_list = get_slice_list_from_preview(preview)
     with h5.File(file, "r", driver="mpio", comm=comm) as in_file:
         dataset = in_file[path]
-        shape = dataset.shape
-        i0 = round((shape[0] / nproc) * rank)
-        i1 = round((shape[0] / nproc) * (rank + 1))
-        proc_data = dataset[i0:i1, :, :]
+        if slice_list[0] == slice(None):
+            length = dataset.shape[0]
+            offset = 0
+            step = 1
+        else:
+            start = 0 if slice_list[0].start is None else slice_list[0].start
+            stop = dataset.shape[0] if slice_list[0].stop is None else slice_list[0].stop
+            step = dataset.shape[0] if slice_list[0].step is None else slice_list[0].step
+            length = (stop - start)//step
+            offset = start
+        i0 = round((length / nproc) * rank) + offset
+        i1 = round((length / nproc) * (rank + 1)) + offset
+        proc_data = dataset[i0:i1:step, slice_list[1], slice_list[2]]
         return proc_data
 
 
@@ -117,8 +147,23 @@ def read_chunks(file, path, comm):
             proc_data = dataset[chunk_slice_lists[chunk_no][0],  # slices 0th dimension
                                 chunk_slice_lists[chunk_no][1],  # slices 1st dimension
                                 chunk_slice_lists[chunk_no][2]]  # slices 2nd dimension
-                                                                 # to produce a 3d chunk
+            # to produce a 3d chunk
     return nchunks
+
+
+def get_slice_list_from_preview(preview):
+    slice_list = [None] * 3
+    preview = preview.split(",")
+    for dimension, value in enumerate(preview):
+        values = value.split(":")
+        new_values = [None if x == '' else int(x) for x in values]
+        if len(values) == 1:
+            slice_list[dimension] = slice(new_values[0])
+        elif len(values) == 2:
+            slice_list[dimension] = slice(new_values[0], new_values[1])
+        elif len(values) == 3:
+            slice_list[dimension] = slice(new_values[0], new_values[1], new_values[2])
+    return slice_list
 
 
 def main():
