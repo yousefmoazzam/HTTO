@@ -35,9 +35,11 @@ def __option_parser():
     return args
 
 
-def read_through_dim3(args, rank, nproc):
-    with h5.File(args.in_file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
-        dataset = in_file[args.path]
+def read_through_dim3(file, path, comm):
+    rank = comm.rank
+    nproc = comm.size
+    with h5.File(file, "r", driver="mpio", comm=comm) as in_file:
+        dataset = in_file[path]
         shape = dataset.shape
         i0 = round((shape[2] / nproc) * rank)
         i1 = round((shape[2] / nproc) * (rank + 1))
@@ -45,9 +47,11 @@ def read_through_dim3(args, rank, nproc):
         return proc_data
 
 
-def read_through_dim2(args, rank, nproc):
-    with h5.File(args.in_file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
-        dataset = in_file[args.path]
+def read_through_dim2(file, path, comm):
+    rank = comm.rank
+    nproc = comm.size
+    with h5.File(file, "r", driver="mpio", comm=comm) as in_file:
+        dataset = in_file[path]
         shape = dataset.shape
         i0 = round((shape[1] / nproc) * rank)
         i1 = round((shape[1] / nproc) * (rank + 1))
@@ -55,9 +59,11 @@ def read_through_dim2(args, rank, nproc):
         return proc_data
 
 
-def read_through_dim1(args, rank, nproc):
-    with h5.File(args.in_file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
-        dataset = in_file[args.path]
+def read_through_dim1(file, path, comm):
+    rank = comm.rank
+    nproc = comm.size
+    with h5.File(file, "r", driver="mpio", comm=comm) as in_file:
+        dataset = in_file[path]
         shape = dataset.shape
         i0 = round((shape[0] / nproc) * rank)
         i1 = round((shape[0] / nproc) * (rank + 1))
@@ -65,9 +71,11 @@ def read_through_dim1(args, rank, nproc):
         return proc_data
 
 
-def read_chunks(args, rank, nproc):
-    with h5.File(args.in_file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
-        dataset = in_file[args.path]
+def read_chunks(file, path, comm):
+    rank = comm.rank
+    nproc = comm.size
+    with h5.File(file, "r", driver="mpio", comm=comm) as in_file:
+        dataset = in_file[path]
         shape = dataset.shape
         chunks = dataset.chunks
 
@@ -103,8 +111,8 @@ def read_chunks(args, rank, nproc):
     i1 = round((nchunks / nproc) * (rank + 1))
 
     # Reading each chunk from the dataset using the slice lists.
-    with h5.File(args.in_file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
-        dataset = in_file[args.path]
+    with h5.File(file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
+        dataset = in_file[path]
         for chunk_no in range(i0, i1):
             proc_data = dataset[chunk_slice_lists[chunk_no][0],  # slices 0th dimension
                                 chunk_slice_lists[chunk_no][1],  # slices 1st dimension
@@ -156,7 +164,7 @@ def main():
         MPI.COMM_WORLD.Barrier()
         if chunks is not None and "c" in args.include:
             tstart_c = MPI.Wtime()
-            nchunks = read_chunks(args, rank, nproc)
+            nchunks = read_chunks(args.in_file, args.path, MPI.COMM_WORLD)
             tstop_c = MPI.Wtime()
             time_c = tstop_c - tstart_c
             if rank == 0:
@@ -168,7 +176,7 @@ def main():
         MPI.COMM_WORLD.Barrier()
         if "p" in args.include:
             tstart_p = MPI.Wtime()
-            read_through_dim1(args, rank, nproc)
+            read_through_dim1(args.in_file, args.path, MPI.COMM_WORLD)
             tstop_p = MPI.Wtime()
             time_p = tstop_p - tstart_p
             if rank == 0:
@@ -180,7 +188,7 @@ def main():
         MPI.COMM_WORLD.Barrier()
         if "s" in args.include:
             tstart_s = MPI.Wtime()
-            read_through_dim2(args, rank, nproc)
+            read_through_dim2(args.in_file, args.path, MPI.COMM_WORLD)
             tstop_s = MPI.Wtime()
             time_s = tstop_s - tstart_s
             if rank == 0:
@@ -192,7 +200,7 @@ def main():
         MPI.COMM_WORLD.Barrier()
         if "t" in args.include:
             tstart_t = MPI.Wtime()
-            read_through_dim3(args, rank, nproc)
+            read_through_dim3(args.in_file, args.path, MPI.COMM_WORLD)
             tstop_t = MPI.Wtime()
             time_t = tstop_t - tstart_t
             if rank == 0:
