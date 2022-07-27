@@ -5,10 +5,11 @@ Splits data between processes in different ways.
 Prints and/or collects time taken to read data in each of these ways.
 
 Usage:
-mpirun -np 4 python load_h5.py /path/to/datafile.h5 -p /entry/data -c /path/to/csvfile.csv -r 5
+mpirun -np 4 python load_h5.py /path/to/datafile.h5 -p /entry/data -c /path/to/csvfile.csv -r 5 -s p
 -p - path to dataset within data file. /entry1/tomo_entry/data/data by default.
 -c - add results to a csv file (will create if file doesn't exist).
 -r - repeat multiple times.
+-s - slicing direction(s) to use. Projections by default
 
 Author: Jacob Williamson
 
@@ -29,10 +30,21 @@ def __option_parser():
     parser.add_argument("-p", "--path", default="/entry1/tomo_entry/data/data", help="Data path.")
     parser.add_argument("-c", "--csv", default=None, help="Write results to specified csv file.")
     parser.add_argument("-r", "--repeat", type=int, default=1, help="Number of repeats.")
-    parser.add_argument("-i", "--include", type=list, default=["p"],
+    parser.add_argument("-s", "--slicing", type=list, default=["p"],
                         help="Which slicing options to use (c, p, s, t).")
     args = parser.parse_args()
     return args
+
+
+def load_data(file, path, dim, comm=MPI.COMM_WORLD, preview=":,:,:"):
+    if dim == 1:
+        return read_through_dim1(file, path, comm, preview)
+    elif dim == 2:
+        return read_through_dim2(file, path, comm, preview)
+    elif dim == 3:
+        return read_through_dim3(file, path, comm, preview)
+    else:
+        raise Exception("Invalid dimension. Choose 1, 2 or 3.")
 
 
 def read_through_dim3(file, path, comm, preview=":,:,:"):
@@ -48,7 +60,7 @@ def read_through_dim3(file, path, comm, preview=":,:,:"):
         else:
             start = 0 if slice_list[2].start is None else slice_list[1].start
             stop = dataset.shape[2] if slice_list[2].stop is None else slice_list[2].stop
-            step = dataset.shape[2] if slice_list[2].step is None else slice_list[2].step
+            step = 1 if slice_list[2].step is None else slice_list[2].step
             length = (stop - start) // step
             offset = start
         i0 = round((length / nproc) * rank) + offset
@@ -70,13 +82,13 @@ def read_through_dim2(file, path, comm, preview=":,:,:"):
         else:
             start = 0 if slice_list[1].start is None else slice_list[1].start
             stop = dataset.shape[1] if slice_list[1].stop is None else slice_list[1].stop
-            step = dataset.shape[1] if slice_list[1].step is None else slice_list[1].step
+            step = 1 if slice_list[1].step is None else slice_list[1].step
             length = (stop - start)//step
             offset = start
         i0 = round((length / nproc) * rank) + offset
         i1 = round((length / nproc) * (rank + 1)) + offset
         proc_data = dataset[:, i0:i1:step, :]
-        return proc_data
+        return proc_data, [i0, i1, step]
 
 
 def read_through_dim1(file, path, comm, preview=":,:,:"):
@@ -92,7 +104,7 @@ def read_through_dim1(file, path, comm, preview=":,:,:"):
         else:
             start = 0 if slice_list[0].start is None else slice_list[0].start
             stop = dataset.shape[0] if slice_list[0].stop is None else slice_list[0].stop
-            step = dataset.shape[0] if slice_list[0].step is None else slice_list[0].step
+            step = 1 if slice_list[0].step is None else slice_list[0].step
             length = (stop - start)//step
             offset = start
         i0 = round((length / nproc) * rank) + offset
@@ -151,12 +163,43 @@ def read_chunks(file, path, comm):
     return nchunks
 
 
+def get_angles(file, path="/entry1/tomo_entry/data/rotation_angle", comm=MPI.COMM_WORLD):
+    with h5.File(file, "r", driver="mpio", comm=comm) as file:
+        angles = file[path][...]
+    return angles
+
+
+def get_darks_flats(file, data_path="/entry1/tomo_entry/data/data",
+                    image_key_path="/entry1/instrument/image_key/image_key", comm=MPI.COMM_WORLD, preview=":,:,:"):
+    slice_list = get_slice_list_from_preview(preview)
+    with h5.File(file, "r", driver="mpio", comm=comm) as file:
+        darks_indices = []
+        flats_indices = []
+        for i, key in enumerate(file[image_key_path]):
+            if int(key) == 1:
+                flats_indices.append(i)
+            elif int(key) == 2:
+                darks_indices.append(i)
+        darks = [file[data_path][x][slice_list[1]][slice_list[2]] for x in darks_indices]
+        flats = [file[data_path][x][slice_list[1]][slice_list[2]] for x in flats_indices]
+        return darks, flats
+
+
+def get_data_indices(file, image_key_path="/entry1/instrument/image_key/image_key", comm=MPI.COMM_WORLD):
+    with h5.File(file, "r", driver="mpio", comm=comm) as file:
+        data_indices = []
+        for i, key in enumerate(file[image_key_path]):
+            if int(key) == 0:
+                data_indices.append(i)
+    return data_indices
+
+
 def get_slice_list_from_preview(preview):
     slice_list = [None] * 3
     preview = preview.split(",")
     for dimension, value in enumerate(preview):
         values = value.split(":")
-        new_values = [None if x == '' else int(x) for x in values]
+        new_values = [None if x.strip() == '' else int(x) for x in values]
         if len(values) == 1:
             slice_list[dimension] = slice(new_values[0])
         elif len(values) == 2:
