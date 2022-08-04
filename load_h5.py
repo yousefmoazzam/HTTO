@@ -36,15 +36,16 @@ def __option_parser():
     return args
 
 
-def load_data(file, path, dim, comm=MPI.COMM_WORLD, preview=":,:,:"):
+def load_data(file, dim, path, comm=MPI.COMM_WORLD, preview=":,:,:"):
     if dim == 1:
-        return read_through_dim1(file, path, comm, preview)
+        data = read_through_dim1(file, path, comm, preview)
     elif dim == 2:
-        return read_through_dim2(file, path, comm, preview)
+        data = read_through_dim2(file, path, comm, preview)
     elif dim == 3:
-        return read_through_dim3(file, path, comm, preview)
+        data = read_through_dim3(file, path, comm, preview)
     else:
         raise Exception("Invalid dimension. Choose 1, 2 or 3.")
+    return data
 
 
 def read_through_dim3(file, path, comm, preview=":,:,:"):
@@ -88,7 +89,7 @@ def read_through_dim2(file, path, comm, preview=":,:,:"):
         i0 = round((length / nproc) * rank) + offset
         i1 = round((length / nproc) * (rank + 1)) + offset
         proc_data = dataset[:, i0:i1:step, :]
-        return proc_data, [i0, i1, step]
+        return proc_data
 
 
 def read_through_dim1(file, path, comm, preview=":,:,:"):

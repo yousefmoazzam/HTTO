@@ -36,6 +36,37 @@ def save_file_chunked(in_file, out_folder, chunks, path="/entry1/tomo_entry/data
     new_file.close()
 
 
+def save_dataset(out_folder, file_name, data, slice_dim, path="/data", comm=MPI.COMM_WORLD):
+    shape = get_data_shape(data, slice_dim - 1, comm)
+    dtype = data.dtype
+    with h5.File(f"{out_folder}/{file_name}", "a", driver="mpio", comm=comm) as file:
+        dataset = file.create_dataset(path, shape, dtype)
+        save_data_parallel(dataset, data, slice_dim)
+
+
+def save_data_parallel(dataset, data, slice_dim, comm=MPI.COMM_WORLD,):
+    rank = comm.rank
+    nproc = comm.size
+    length = dataset.shape[slice_dim - 1]
+    i0 = round((length / nproc) * rank)
+    i1 = round((length / nproc) * (rank + 1))
+    if slice_dim == 1:
+        dataset[i0:i1] = data[...]
+    elif slice_dim == 2:
+        dataset[:, i0:i1] = data[...]
+    elif slice_dim == 3:
+        dataset[:, :, i0:i1] = data[...]
+
+
+def get_data_shape(data, dim, comm=MPI.COMM_WORLD):
+    shape = list(data.shape)
+    lengths = comm.gather(shape[dim], 0)
+    lengths = comm.bcast(lengths, 0)
+    shape[dim] = sum(lengths)
+    shape = tuple(shape)
+    return shape
+
+
 def main():
     args = __option_parser()
     chunks = (150, 150, 10)
