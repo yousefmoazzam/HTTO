@@ -30,11 +30,12 @@ def main():
     with h5.File(args.in_file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
         dataset = in_file[args.path]
         shape = dataset.shape
-    angles = load_h5.get_angles(args.in_file, comm=MPI.COMM_WORLD)
-    #angles = np.deg2rad(angles)
+    angles_degrees = load_h5.get_angles(args.in_file, comm=MPI.COMM_WORLD)    
     data_indices = load_h5.get_data_indices(args.in_file,
                                             image_key_path="/entry1/tomo_entry/instrument/detector/image_key",
                                             comm=MPI.COMM_WORLD)
+    angles_radians = np.deg2rad(angles_degrees[data_indices])
+    
     preview = [f"{data_indices[0]}: {data_indices[-1] + 1}", ":", ":"]
     if args.crop != 100:
         new_length = int(round(shape[1] * args.crop/100))
@@ -59,7 +60,10 @@ def main():
     print(f"Data normalised in {norm_time} seconds")
 
     min_log_time0 = MPI.Wtime()
-    data = tomopy.minus_log(data)
+    #data = tomopy.minus_log(data)
+    data[data > 0.0] = -np.log(data[data > 0.0])
+    data[data < 0.0] = 0.0 # remove negative values
+    
     min_log_time1 = MPI.Wtime()
     min_log_time = min_log_time1 - min_log_time0
     print(f"Minus log process executed in {min_log_time} seconds")
@@ -83,14 +87,22 @@ def main():
     reload_time = reload_time1 - reload_time0
     print(f"Data reloaded in {reload_time} seconds")
 
+
+    print(f"Data shape is {np.shape(data)}")
+    print(f"Angles shape is {np.shape(angles_radians)}")
+    
     center_time0 = MPI.Wtime()
-    rot_center = tomopy.find_center(data, angles)
+    data = np.swapaxes(data, 0, 1)
+    mid_slice = int(np.size(data,1)/2)
+    print(f"Mid slice is {mid_slice}")
+    rot_center = tomopy.find_center_vo(data[:,mid_slice,:])
     center_time1 = MPI.Wtime()
     center_time = center_time1 - center_time0
     print(f"COR found in {center_time} seconds")
+    print(f"COR is {rot_center}")
 
     recon_time0 = MPI.Wtime()
-    recon = tomopy.recon(data, angles, center=rot_center, algorithm='gridrec', sinogram_order=False)
+    recon = tomopy.recon(data, angles_radians, center=rot_center, algorithm='gridrec', sinogram_order=True)
     recon_time1 = MPI.Wtime()
     recon_time = recon_time1 - recon_time0
     print(f"Data reconstructed in {recon_time} seconds")
