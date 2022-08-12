@@ -3,7 +3,6 @@ import h5py as h5
 import argparse
 import os.path
 
-
 def __option_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("in_file", help="Input data file.")
@@ -14,7 +13,6 @@ def __option_parser():
 
 
 def save_file_chunked(in_file, out_folder, chunks, path="/entry1/tomo_entry/data/data"):
-
     with h5.File(in_file, "r", driver="mpio", comm=MPI.COMM_WORLD) as my_file:
         dataset = my_file[path]
         shape = dataset.shape
@@ -36,11 +34,11 @@ def save_file_chunked(in_file, out_folder, chunks, path="/entry1/tomo_entry/data
     new_file.close()
 
 
-def save_dataset(out_folder, file_name, data, slice_dim, path="/data", comm=MPI.COMM_WORLD):
+def save_dataset(out_folder, file_name, data, slice_dim, chunks, path="/data", comm=MPI.COMM_WORLD):
     shape = get_data_shape(data, slice_dim - 1, comm)
     dtype = data.dtype
     with h5.File(f"{out_folder}/{file_name}", "a", driver="mpio", comm=comm) as file:
-        dataset = file.create_dataset(path, shape, dtype)
+        dataset = file.create_dataset(path, shape, dtype, chunks=chunks)
         save_data_parallel(dataset, data, slice_dim)
 
 
@@ -69,6 +67,7 @@ def get_data_shape(data, dim, comm=MPI.COMM_WORLD):
 
 def main():
     args = __option_parser()
+    
     chunks = (150, 150, 10)
     save_file_chunked(args.in_file, args.out_folder, chunks, path=args.path)
 
