@@ -21,6 +21,7 @@ def __option_parser():
     parser.add_argument("-cr", "--crop", type=int, choices=range(1, 101), default=100,
                         help="Percentage of data to process. 10 will take the middle 10% of data in the second.")
     parser.add_argument("-m", "--methods_no", type=int, default=1, help="The number of different methods to apply to data.")
+    parser.add_argument("-nc", "--ncore", type=int, default=1, help="The number of cores.")
     args = parser.parse_args()
     return args
 
@@ -28,7 +29,7 @@ def __option_parser():
 def main():
     args = __option_parser()
     for i in range(args.repeat):
-        print(f"Run number: {i}")    
+        print(f"Run number: {i}")
         total_time0 = MPI.Wtime()
         with h5.File(args.in_file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
             dataset = in_file[args.path]
@@ -61,19 +62,19 @@ def main():
         print(f"Data shape is {(angles_total, detector_y, detector_x)}")
         
         norm_time0 = MPI.Wtime()
-        data = tomopy.normalize(data, flats, darks)
+        data = tomopy.normalize(data, flats, darks, ncore=args.ncore)
         norm_time1 = MPI.Wtime()
         norm_time = norm_time1 - norm_time0
         print(f"Data normalised in {norm_time} seconds")
         
         min_log_time0 = MPI.Wtime()
-        data = tomopy.minus_log(data)
+        data = tomopy.minus_log(data, ncore=args.ncore)
         #data[data > 0.0] = -np.log(data[data > 0.0])
         #data[data < 0.0] = 0.0 # remove negative values
         min_log_time1 = MPI.Wtime()
         min_log_time = min_log_time1 - min_log_time0
         print(f"Minus log process executed in {min_log_time} seconds")
-    
+        
         abs_out_folder = os.path.abspath(args.out_folder)
         out_folder = f"{abs_out_folder}/{datetime.now().strftime('%d-%m-%Y_%H_%M_%S')}_recon"
         if MPI.COMM_WORLD.rank == 0:
@@ -101,8 +102,9 @@ def main():
         data = load_h5.load_data(f"{out_folder}/intermediate.h5", slicing_dim, "/data", comm=MPI.COMM_WORLD)
         reload_time1 = MPI.Wtime()
         reload_time = reload_time1 - reload_time0
-        print(f"Data reloaded in {reload_time} seconds")        
-        
+        print(f"Data reloaded in {reload_time} seconds")    
+    
+        """
         # calculating the center of rotation 
         center_time0 = MPI.Wtime()
         mid_slice = int(np.size(data,1)/2)
@@ -113,6 +115,10 @@ def main():
         center_time = center_time1 - center_time0
         print(f"COR found in {center_time} seconds")
         print(f"COR is {rot_center}")
+        """
+        data = np.swapaxes(data, 0, 1)    
+        rot_center = 1290
+        
         
         if (args.methods_no == 2):
             # removing stripes
@@ -155,7 +161,7 @@ def main():
             print(f"Applying Paganin filter in {filter_time} seconds")              
             
         recon_time0 = MPI.Wtime()
-        recon = tomopy.recon(data, angles_radians, center=rot_center, algorithm='gridrec', sinogram_order=True)
+        recon = tomopy.recon(data, angles_radians, center=rot_center, algorithm='gridrec', sinogram_order=True, ncore=args.ncore)
         recon_time1 = MPI.Wtime()
         recon_time = recon_time1 - recon_time0
         print(f"Data reconstructed in {recon_time} seconds")
@@ -171,7 +177,7 @@ def main():
 
         total_time1 = MPI.Wtime()
         total_time = total_time1 - total_time0
-        print(f"Total time = {total_time} seconds.")  
+        print(f"Total time = {total_time} seconds.")       
 
 if __name__ == '__main__':
     main()
