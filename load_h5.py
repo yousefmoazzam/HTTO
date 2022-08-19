@@ -88,7 +88,7 @@ def read_through_dim2(file, path, comm, preview=":,:,:"):
             offset = start
         i0 = round((length / nproc) * rank) + offset
         i1 = round((length / nproc) * (rank + 1)) + offset
-        proc_data = dataset[slice_list[0], i0:i1:step, :]
+        proc_data = dataset[:, i0:i1:step, :]
         return proc_data
 
 

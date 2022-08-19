@@ -62,15 +62,15 @@ def main():
         print(f"Data shape is {(angles_total, detector_y, detector_x)}")
         
         norm_time0 = MPI.Wtime()
-        data = tomopy.normalize(data, flats, darks, ncore=args.ncore)
+        data = tomopy.normalize(data, flats, darks, ncore=args.ncore, cutoff=10)
         norm_time1 = MPI.Wtime()
         norm_time = norm_time1 - norm_time0
         print(f"Data normalised in {norm_time} seconds")
         
         min_log_time0 = MPI.Wtime()
+        data[data == 0.0] = 1e-09
         data = tomopy.minus_log(data, ncore=args.ncore)
-        #data[data > 0.0] = -np.log(data[data > 0.0])
-        #data[data < 0.0] = 0.0 # remove negative values
+        #data[data > 0.0] = -np.log(data[data > 0.0])        
         min_log_time1 = MPI.Wtime()
         min_log_time = min_log_time1 - min_log_time0
         print(f"Minus log process executed in {min_log_time} seconds")
@@ -83,7 +83,7 @@ def main():
             print("Directory made")
 
         # calculate the chunk size for the projection data
-        slices_no_in_chunks = 2
+        slices_no_in_chunks = 1
         if (args.dimension == 1):
             chunks_data = (slices_no_in_chunks, detector_y, detector_x)
         elif (args.dimension == 2):
@@ -102,23 +102,19 @@ def main():
         data = load_h5.load_data(f"{out_folder}/intermediate.h5", slicing_dim, "/data", comm=MPI.COMM_WORLD)
         reload_time1 = MPI.Wtime()
         reload_time = reload_time1 - reload_time0
-        print(f"Data reloaded in {reload_time} seconds")    
-    
-        """
+        print(f"Data reloaded in {reload_time} seconds")        
+        
         # calculating the center of rotation 
         center_time0 = MPI.Wtime()
         mid_slice = int(np.size(data,1)/2)
         data = np.swapaxes(data, 0, 1)    
-        print(f"Mid slice is {mid_slice}")
-        rot_center = tomopy.find_center_vo(data[:,mid_slice,:])
+        #print(f"Mid slice is {mid_slice}")
+        rot_center = tomopy.find_center_vo(data[:,mid_slice,:], step=0.5, ncore=args.ncore)
         center_time1 = MPI.Wtime()
         center_time = center_time1 - center_time0
         print(f"COR found in {center_time} seconds")
-        print(f"COR is {rot_center}")
-        """
-        data = np.swapaxes(data, 0, 1)    
-        rot_center = 1290
-        
+        print(f"COR is {rot_center}")        
+       
         
         if (args.methods_no == 2):
             # removing stripes

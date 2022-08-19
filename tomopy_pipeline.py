@@ -103,6 +103,8 @@ def main():
         reload_time = reload_time1 - reload_time0
         print(f"Data reloaded in {reload_time} seconds")        
         
+    
+        """
         # calculating the center of rotation 
         center_time0 = MPI.Wtime()
         mid_slice = int(np.size(data,1)/2)
@@ -113,6 +115,9 @@ def main():
         center_time = center_time1 - center_time0
         print(f"COR found in {center_time} seconds")
         print(f"COR is {rot_center}")
+        """
+        data = np.swapaxes(data, 0, 1)    
+        rot_center = 1290
         
         if (args.methods_no == 2):
             # removing stripes
