@@ -109,12 +109,13 @@ def main():
         rot_center = 0
         data = np.swapaxes(data, 0, 1)
         mid_rank = int(round(MPI.COMM_WORLD.size/2)+0.1)
+        print(f"Mid rank is {mid_rank}")
         if MPI.COMM_WORLD.rank == mid_rank:
             print(np.size(data, 0))
             mid_slice = int(np.size(data,0)/2)
-            #print(f"Mid slice is {mid_slice}")
+            print(f"Mid slice is {mid_slice}")
             rot_center = tomopy.find_center_vo(data[mid_slice:, :, :], step=0.5, ncore=args.ncore)
-        rot_center = MPI.COMM_WORLD.bcast(rot_center, root=0)
+        rot_center = MPI.COMM_WORLD.bcast(rot_center, root=mid_rank)
         center_time1 = MPI.Wtime()
         center_time = center_time1 - center_time0
         print(f"COR found in {center_time} seconds")
