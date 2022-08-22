@@ -109,20 +109,18 @@ def main():
         rot_center = 0
         data = np.swapaxes(data, 0, 1)
         mid_rank = int(round(MPI.COMM_WORLD.size/2)+0.1)
-        print(f"Mid rank is {mid_rank}")
+        print(data.shape)
         if MPI.COMM_WORLD.rank == mid_rank:
             print(np.size(data, 0))
             mid_slice = int(np.size(data,0)/2)
-            print(f"Mid slice is {mid_slice}")
-            rot_center = tomopy.find_center_vo(data[mid_slice:, :, :], step=0.5, ncore=args.ncore)
+            #print(f"Slice for calculation CoR {mid_slice}")
+            rot_center = tomopy.find_center_vo(data[mid_slice, :, :], step=0.5, ncore=args.ncore)
+            #print(f"The calculated CoR is {rot_center}")
         rot_center = MPI.COMM_WORLD.bcast(rot_center, root=mid_rank)
         center_time1 = MPI.Wtime()
         center_time = center_time1 - center_time0
-        print(f"COR found in {center_time} seconds")
-        print(f"COR is {rot_center}")
-        print(data.shape)
-       
-        
+        print(f"COR found in {center_time} seconds")               
+
         if (args.methods_no == 2):
             # removing stripes
             stripes_time0 = MPI.Wtime()
@@ -164,6 +162,7 @@ def main():
             print(f"Applying Paganin filter in {filter_time} seconds")              
             
         recon_time0 = MPI.Wtime()
+        print(f"The actual used CoR is {rot_center}")
         recon = tomopy.recon(data, angles_radians, center=rot_center, algorithm='gridrec', sinogram_order=True, ncore=args.ncore)
         recon_time1 = MPI.Wtime()
         recon_time = recon_time1 - recon_time0
