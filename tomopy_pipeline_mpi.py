@@ -19,7 +19,7 @@ def __option_parser():
     parser.add_argument("-d", "--dimension", type=int, choices=[1, 2, 3], default=1,
                         help="Which dimension to slice through (usually 1 = projections, 2 = sinograms).")
     parser.add_argument("-cr", "--crop", type=int, choices=range(1, 101), default=100,
-                        help="Percentage of data to process. 10 will take the middle 10% of data in the second.")
+                        help="Percentage of data to process. 10 will take the middle 10% of data in the second dimension.")
     parser.add_argument("-m", "--methods_no", type=int, default=1, help="The number of different methods to apply to data.")
     parser.add_argument("-nc", "--ncore", type=int, default=1, help="The number of cores.")
     args = parser.parse_args()
@@ -34,6 +34,7 @@ def main():
         with h5.File(args.in_file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
             dataset = in_file[args.path]
             shape = dataset.shape
+        print_once(f"Dataset shape is {shape}")
         angles_degrees = load_h5.get_angles(args.in_file, comm=MPI.COMM_WORLD)    
         data_indices = load_h5.get_data_indices(args.in_file,
                                                 image_key_path="/entry1/tomo_entry/instrument/detector/image_key",
@@ -46,26 +47,31 @@ def main():
             new_length = int(round(shape[1] * args.crop/100))
             offset = int((shape[1] - new_length) / 2)
             preview[1] = f"{offset}: {offset + new_length}"
+            cropped_shape = (data_indices[-1] + 1 - data_indices[0], new_length, shape[2])
+        else:
+            cropped_shape = (data_indices[-1] + 1 - data_indices[0], shape[1], shape[2])
         preview = ", ".join(preview)
 
+        print_once(f"Cropped data shape is {cropped_shape}")
+
         load_time0 = MPI.Wtime()
-        data = load_h5.load_data(args.in_file, 2, args.path, comm=MPI.COMM_WORLD, preview=preview)
+        data = load_h5.load_data(args.in_file, args.dimension, args.path, comm=MPI.COMM_WORLD, preview=preview)
         load_time1 = MPI.Wtime()
         load_time = load_time1 - load_time0
-        print(f"Raw projection data loaded in {load_time} seconds")
+        print_once(f"Raw projection data loaded in {load_time} seconds")
 
         darks, flats = load_h5.get_darks_flats(args.in_file, args.path,
                                             image_key_path="/entry1/tomo_entry/instrument/detector/image_key",
-                                            comm=MPI.COMM_WORLD, preview=preview, dim=2)
+                                            comm=MPI.COMM_WORLD, preview=preview, dim=args.dimension)
 
         (angles_total, detector_y, detector_x) = np.shape(data)
-        print(f"Data shape is {(angles_total, detector_y, detector_x)}")
+        print(f"Process {MPI.COMM_WORLD.rank}'s data shape is {(angles_total, detector_y, detector_x)}")
         
         norm_time0 = MPI.Wtime()
         data = tomopy.normalize(data, flats, darks, ncore=args.ncore, cutoff=10)
         norm_time1 = MPI.Wtime()
         norm_time = norm_time1 - norm_time0
-        print(f"Data normalised in {norm_time} seconds")
+        print_once(f"Data normalised in {norm_time} seconds")
         
         min_log_time0 = MPI.Wtime()
         data[data == 0.0] = 1e-09
@@ -73,7 +79,7 @@ def main():
         #data[data > 0.0] = -np.log(data[data > 0.0])        
         min_log_time1 = MPI.Wtime()
         min_log_time = min_log_time1 - min_log_time0
-        print(f"Minus log process executed in {min_log_time} seconds")
+        print_once(f"Minus log process executed in {min_log_time} seconds")
         
         abs_out_folder = os.path.abspath(args.out_folder)
         out_folder = f"{abs_out_folder}/{datetime.now().strftime('%d-%m-%Y_%H_%M_%S')}_recon"
@@ -91,18 +97,19 @@ def main():
         else:
             chunks_data = (angles_total, detector_y, slices_no_in_chunks)
 
-        #save_time0 = MPI.Wtime()
-        #chunk_h5.save_dataset(out_folder, "intermediate.h5", data, args.dimension, chunks_data, comm=MPI.COMM_WORLD)
-        #save_time1 = MPI.Wtime()
-        #save_time = save_time1 - save_time0
-        #print(f"Intermediate data saved in {save_time} seconds")
-        
-        #slicing_dim = 2 # assuming sinogram slicing here to get it loaded
-        #reload_time0 = MPI.Wtime()
-        #data = load_h5.load_data(f"{out_folder}/intermediate.h5", slicing_dim, "/data", comm=MPI.COMM_WORLD)
-        #reload_time1 = MPI.Wtime()
-        #reload_time = reload_time1 - reload_time0
-        #print(f"Data reloaded in {reload_time} seconds")
+        if args.dimension == 1:
+            save_time0 = MPI.Wtime()
+            chunk_h5.save_dataset(out_folder, "intermediate.h5", data, args.dimension, chunks_data, comm=MPI.COMM_WORLD)
+            save_time1 = MPI.Wtime()
+            save_time = save_time1 - save_time0
+            print(f"Intermediate data saved in {save_time} seconds")
+
+            slicing_dim = 2 # assuming sinogram slicing here to get it loaded
+            reload_time0 = MPI.Wtime()
+            data = load_h5.load_data(f"{out_folder}/intermediate.h5", slicing_dim, "/data", comm=MPI.COMM_WORLD)
+            reload_time1 = MPI.Wtime()
+            reload_time = reload_time1 - reload_time0
+            print(f"Data reloaded in {reload_time} seconds")
         
         # calculating the center of rotation 
         center_time0 = MPI.Wtime()
@@ -117,7 +124,7 @@ def main():
         rot_center = MPI.COMM_WORLD.bcast(rot_center, root=mid_rank)
         center_time1 = MPI.Wtime()
         center_time = center_time1 - center_time0
-        print(f"COR found in {center_time} seconds")               
+        print_once(f"COR found in {center_time} seconds")
 
         if (args.methods_no == 2):
             # removing stripes
@@ -125,46 +132,46 @@ def main():
             data = tomopy.prep.stripe.remove_stripe_fw(data, wname='db5', sigma=5, ncore=args.ncore)
             stripes_time1 = MPI.Wtime()
             stripes_time = stripes_time1 - stripes_time0
-            print(f"Data unstriped in {stripes_time} seconds")
+            print_once(f"Data unstriped in {stripes_time} seconds")
         if (args.methods_no == 3):
             # removing stripes
             stripes_time0 = MPI.Wtime()
             data = tomopy.prep.stripe.remove_stripe_fw(data, wname='db5', sigma=5, ncore=args.ncore) 
             stripes_time1 = MPI.Wtime()
             stripes_time = stripes_time1 - stripes_time0
-            print(f"Data unstriped in {stripes_time} seconds")               
+            print_once(f"Data unstriped in {stripes_time} seconds")
             # applying median filter
             filter_time0 = MPI.Wtime()
             data = tomopy.misc.corr.median_filter(data)  
             filter_time1 = MPI.Wtime()
             filter_time = filter_time1 - filter_time0
-            print(f"Data median filtered in {filter_time} seconds")      
+            print_once(f"Data median filtered in {filter_time} seconds")
         if (args.methods_no == 4):
             # removing stripes
             stripes_time0 = MPI.Wtime()
             data = tomopy.prep.stripe.remove_all_stripe(data)    
             stripes_time1 = MPI.Wtime()
             stripes_time = stripes_time1 - stripes_time0
-            print(f"Data unstriped in {stripes_time} seconds")               
+            print_once(f"Data unstriped in {stripes_time} seconds")
             # applying median filter
             filter_time0 = MPI.Wtime()
             data = tomopy.misc.corr.median_filter(data)  
             filter_time1 = MPI.Wtime()
             filter_time = filter_time1 - filter_time0
-            print(f"Data median filtered in {filter_time} seconds")            
+            print_once(f"Data median filtered in {filter_time} seconds")
             # applying Paganin filter
             filter_time0 = MPI.Wtime()
             data = tomopy.prep.phase.retrieve_phase(data)  
             filter_time1 = MPI.Wtime()
             filter_time = filter_time1 - filter_time0
-            print(f"Applying Paganin filter in {filter_time} seconds")              
+            print_once(f"Applying Paganin filter in {filter_time} seconds")
             
         recon_time0 = MPI.Wtime()
-        print(f"The actual used CoR is {rot_center}")
+        print_once(f"The actual used CoR is {rot_center}")
         recon = tomopy.recon(data, angles_radians, center=rot_center, algorithm='gridrec', sinogram_order=True, ncore=args.ncore)
         recon_time1 = MPI.Wtime()
         recon_time = recon_time1 - recon_time0
-        print(f"Data reconstructed in {recon_time} seconds")
+        print_once(f"Data reconstructed in {recon_time} seconds")
         
         (vert_slices, recon_x, recon_y) = np.shape(recon)
         chunks_recon = (slices_no_in_chunks, recon_x, recon_y)    
@@ -173,11 +180,16 @@ def main():
         chunk_h5.save_dataset(out_folder, "reconstruction.h5", recon, 1, chunks_recon, comm=MPI.COMM_WORLD)
         save_recon_time1 = MPI.Wtime()
         save_recon_time = save_recon_time1 - save_recon_time0
-        print(f"Reconstruction saved in {save_recon_time} seconds")
+        print_once(f"Reconstruction saved in {save_recon_time} seconds")
 
         total_time1 = MPI.Wtime()
         total_time = total_time1 - total_time0
-        print(f"Total time = {total_time} seconds.")       
+        print_once(f"Total time = {total_time} seconds.")
+
+
+def print_once(output):
+    if MPI.COMM_WORLD.rank == 0:
+        print(output)
 
 if __name__ == '__main__':
     main()
