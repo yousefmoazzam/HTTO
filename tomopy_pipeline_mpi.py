@@ -49,14 +49,14 @@ def main():
         preview = ", ".join(preview)
 
         load_time0 = MPI.Wtime()
-        data = load_h5.load_data(args.in_file, args.dimension, args.path, comm=MPI.COMM_WORLD, preview=preview)
+        data = load_h5.load_data(args.in_file, 2, args.path, comm=MPI.COMM_WORLD, preview=preview)
         load_time1 = MPI.Wtime()
         load_time = load_time1 - load_time0
         print(f"Raw projection data loaded in {load_time} seconds")
 
         darks, flats = load_h5.get_darks_flats(args.in_file, args.path,
                                             image_key_path="/entry1/tomo_entry/instrument/detector/image_key",
-                                            comm=MPI.COMM_WORLD, preview=preview)
+                                            comm=MPI.COMM_WORLD, preview=preview, dim=2)
 
         (angles_total, detector_y, detector_x) = np.shape(data)
         print(f"Data shape is {(angles_total, detector_y, detector_x)}")
@@ -91,18 +91,18 @@ def main():
         else:
             chunks_data = (angles_total, detector_y, slices_no_in_chunks)
 
-        save_time0 = MPI.Wtime()
-        chunk_h5.save_dataset(out_folder, "intermediate.h5", data, args.dimension, chunks_data, comm=MPI.COMM_WORLD)    
-        save_time1 = MPI.Wtime()
-        save_time = save_time1 - save_time0
-        print(f"Intermediate data saved in {save_time} seconds")
+        #save_time0 = MPI.Wtime()
+        #chunk_h5.save_dataset(out_folder, "intermediate.h5", data, args.dimension, chunks_data, comm=MPI.COMM_WORLD)
+        #save_time1 = MPI.Wtime()
+        #save_time = save_time1 - save_time0
+        #print(f"Intermediate data saved in {save_time} seconds")
         
-        slicing_dim = 2 # assuming sinogram slicing here to get it loaded
-        reload_time0 = MPI.Wtime()
-        data = load_h5.load_data(f"{out_folder}/intermediate.h5", slicing_dim, "/data", comm=MPI.COMM_WORLD)
-        reload_time1 = MPI.Wtime()
-        reload_time = reload_time1 - reload_time0
-        print(f"Data reloaded in {reload_time} seconds")        
+        #slicing_dim = 2 # assuming sinogram slicing here to get it loaded
+        #reload_time0 = MPI.Wtime()
+        #data = load_h5.load_data(f"{out_folder}/intermediate.h5", slicing_dim, "/data", comm=MPI.COMM_WORLD)
+        #reload_time1 = MPI.Wtime()
+        #reload_time = reload_time1 - reload_time0
+        #print(f"Data reloaded in {reload_time} seconds")
         
         # calculating the center of rotation 
         center_time0 = MPI.Wtime()

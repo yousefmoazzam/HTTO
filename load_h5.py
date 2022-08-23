@@ -171,7 +171,8 @@ def get_angles(file, path="/entry1/tomo_entry/data/rotation_angle", comm=MPI.COM
 
 
 def get_darks_flats(file, data_path="/entry1/tomo_entry/data/data",
-                    image_key_path="/entry1/instrument/image_key/image_key", comm=MPI.COMM_WORLD, preview=":,:,:"):
+                    image_key_path="/entry1/instrument/image_key/image_key", comm=MPI.COMM_WORLD, preview=":,:,:",
+                    dim=1):
     slice_list = get_slice_list_from_preview(preview)
     with h5.File(file, "r", driver="mpio", comm=comm) as file:
         darks_indices = []
@@ -181,8 +182,28 @@ def get_darks_flats(file, data_path="/entry1/tomo_entry/data/data",
                 flats_indices.append(i)
             elif int(key) == 2:
                 darks_indices.append(i)
-        darks = [file[data_path][x][slice_list[1]][slice_list[2]] for x in darks_indices]
-        flats = [file[data_path][x][slice_list[1]][slice_list[2]] for x in flats_indices]
+        dataset = file[data_path]
+
+        if dim == 2:
+            rank = comm.rank
+            nproc = comm.size
+            if slice_list[1] == slice(None):
+                length = dataset.shape[1]
+                offset = 0
+                step = 1
+            else:
+                start = 0 if slice_list[1].start is None else slice_list[1].start
+                stop = dataset.shape[1] if slice_list[1].stop is None else slice_list[1].stop
+                step = 1 if slice_list[1].step is None else slice_list[1].step
+                length = (stop - start) // step
+                offset = start
+            i0 = round((length / nproc) * rank) + offset
+            i1 = round((length / nproc) * (rank + 1)) + offset
+            darks = [dataset[x][i0:i1:step][slice_list[2]] for x in darks_indices]
+            flats = [dataset[x][i0:i1:step][slice_list[2]] for x in flats_indices]
+        else:
+            darks = [file[data_path][x][slice_list[1]][slice_list[2]] for x in darks_indices]
+            flats = [file[data_path][x][slice_list[1]][slice_list[2]] for x in flats_indices]
         return darks, flats
 
 
