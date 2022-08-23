@@ -108,10 +108,8 @@ def main():
         center_time0 = MPI.Wtime()
         rot_center = 0
         data = np.swapaxes(data, 0, 1)
-        mid_rank = int(round(MPI.COMM_WORLD.size/2)+0.1)
-        print(data.shape)
+        mid_rank = int(round(MPI.COMM_WORLD.size/2)+0.1)        
         if MPI.COMM_WORLD.rank == mid_rank:
-            print(np.size(data, 0))
             mid_slice = int(np.size(data,0)/2)
             #print(f"Slice for calculation CoR {mid_slice}")
             rot_center = tomopy.find_center_vo(data[mid_slice, :, :], step=0.5, ncore=args.ncore)
@@ -124,14 +122,14 @@ def main():
         if (args.methods_no == 2):
             # removing stripes
             stripes_time0 = MPI.Wtime()
-            data = tomopy.prep.stripe.remove_stripe_based_sorting(data)    
+            data = tomopy.prep.stripe.remove_stripe_fw(data, wname='db5', sigma=5, ncore=args.ncore)
             stripes_time1 = MPI.Wtime()
             stripes_time = stripes_time1 - stripes_time0
             print(f"Data unstriped in {stripes_time} seconds")
         if (args.methods_no == 3):
             # removing stripes
             stripes_time0 = MPI.Wtime()
-            data = tomopy.prep.stripe.remove_stripe_based_sorting(data)    
+            data = tomopy.prep.stripe.remove_stripe_fw(data, wname='db5', sigma=5, ncore=args.ncore) 
             stripes_time1 = MPI.Wtime()
             stripes_time = stripes_time1 - stripes_time0
             print(f"Data unstriped in {stripes_time} seconds")               
@@ -144,7 +142,7 @@ def main():
         if (args.methods_no == 4):
             # removing stripes
             stripes_time0 = MPI.Wtime()
-            data = tomopy.prep.stripe.remove_stripe_based_sorting(data)    
+            data = tomopy.prep.stripe.remove_all_stripe(data)    
             stripes_time1 = MPI.Wtime()
             stripes_time = stripes_time1 - stripes_time0
             print(f"Data unstriped in {stripes_time} seconds")               
