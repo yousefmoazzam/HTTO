@@ -89,7 +89,7 @@ def main():
             print("Directory made")
 
         # calculate the chunk size for the projection data
-        slices_no_in_chunks = 1
+        slices_no_in_chunks = 4
         if (args.dimension == 1):
             chunks_data = (slices_no_in_chunks, detector_y, detector_x)
         elif (args.dimension == 2):
@@ -102,14 +102,14 @@ def main():
             chunk_h5.save_dataset(out_folder, "intermediate.h5", data, args.dimension, chunks_data, comm=MPI.COMM_WORLD)
             save_time1 = MPI.Wtime()
             save_time = save_time1 - save_time0
-            print(f"Intermediate data saved in {save_time} seconds")
+            print_once(f"Intermediate data saved in {save_time} seconds")
 
             slicing_dim = 2 # assuming sinogram slicing here to get it loaded
             reload_time0 = MPI.Wtime()
             data = load_h5.load_data(f"{out_folder}/intermediate.h5", slicing_dim, "/data", comm=MPI.COMM_WORLD)
             reload_time1 = MPI.Wtime()
             reload_time = reload_time1 - reload_time0
-            print(f"Data reloaded in {reload_time} seconds")
+            print_once(f"Data reloaded in {reload_time} seconds")
         
         # calculating the center of rotation 
         center_time0 = MPI.Wtime()
@@ -167,14 +167,23 @@ def main():
             print_once(f"Applying Paganin filter in {filter_time} seconds")
             
         recon_time0 = MPI.Wtime()
-        print_once(f"The actual used CoR is {rot_center}")
-        recon = tomopy.recon(data, angles_radians, center=rot_center, algorithm='gridrec', sinogram_order=True, ncore=args.ncore)
+        print_once(f"The actual used CoR is {rot_center}")        
+        recon = tomopy.recon(data, angles_radians, center=rot_center, algorithm='gridrec', sinogram_order=True, ncore=args.ncore)        
+        """
+        options = {'proj_type': 'cuda', 'method': 'FBP_CUDA', 'gpu_list': [0, 1, 2, 3]}
+        recon = tomopy.recon(data,
+                     angles_radians,
+                     center=rot_center,
+                     algorithm=tomopy.astra,
+                     options=options,
+                     ncore=args.ncore)
+        """
         recon_time1 = MPI.Wtime()
         recon_time = recon_time1 - recon_time0
         print_once(f"Data reconstructed in {recon_time} seconds")
         
         (vert_slices, recon_x, recon_y) = np.shape(recon)
-        chunks_recon = (slices_no_in_chunks, recon_x, recon_y)    
+        chunks_recon = (1, recon_x, recon_y) 
         
         save_recon_time0 = MPI.Wtime()
         chunk_h5.save_dataset(out_folder, "reconstruction.h5", recon, 1, chunks_recon, comm=MPI.COMM_WORLD)
