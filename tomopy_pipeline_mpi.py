@@ -94,7 +94,7 @@ def main():
             print("Directory made")
 
         nNodes = 1 # change this when nNodes > 1
-        GPUs_list = GPUtil.getAvailable() # will return a list of availble GPUs
+        GPUs_list = GPUtil.getAvailable(order='memory', limit=4) # will return a list of availble GPUs
         GPU_index_wr_to_rank = __calculate_GPU_index(nNodes, rank, GPUs_list)
         #print(len(GPUs_list))
         #print(GPU_index_wr_to_rank)
