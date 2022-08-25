@@ -205,6 +205,7 @@ def __calculate_GPU_index(nNodes, rank, GPUs_list):
 
 
 def concat_for_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
+    """Concatonate data into larger arrays for processes that will be active during gpu methods."""
     root = comm.rank % nGPUs
     if comm.rank == root:
         active = True
@@ -223,7 +224,7 @@ def concat_for_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
 
 
 def scatter_after_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
-    """After a GPU plugin where data has been concatonated, split """
+    """After a GPU plugin where data has been concatonated, split data back up between all processes."""
     root = comm.rank % nGPUs
     if comm.rank == root:
         group_size = 0
