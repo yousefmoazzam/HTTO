@@ -7,6 +7,7 @@ import load_h5
 import chunk_h5
 from datetime import datetime
 import os
+from data import Data
 
 
 def __option_parser():
@@ -14,6 +15,7 @@ def __option_parser():
     parser.add_argument("in_file", help="Input data file.")
     parser.add_argument("out_folder", help="Output folder.")
     parser.add_argument("-p", "--path", default="/entry1/tomo_entry/data/data", help="Data path.")
+    parser.add_argument("-ikp", "--image_key_path", default="/entry1/tomo_entry/instrument/detector/image_key", help="Image key path.")
     parser.add_argument("-c", "--csv", default=None, help="Write results to specified csv file.")
     parser.add_argument("-r", "--repeat", type=int, default=1, help="Number of repeats.")
     parser.add_argument("-d", "--dimension", type=int, choices=[1, 2, 3], default=1,
@@ -34,6 +36,8 @@ def main():
         with h5.File(args.in_file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
             dataset = in_file[args.path]
             shape = dataset.shape
+        data_obj = Data(args.in_file, args.path, args.image_key_path, MPI.COMM_WORLD)
+        data_obj.load_data(args.dimension)
         print_once(f"Dataset shape is {shape}")
         angles_degrees = load_h5.get_angles(args.in_file, comm=MPI.COMM_WORLD)    
         data_indices = load_h5.get_data_indices(args.in_file,

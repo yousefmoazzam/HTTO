@@ -28,7 +28,7 @@ class Data:
         self.flats = None
         self._comm = comm
         self.data_indices = load_h5.get_data_indices(file, image_key_path=image_key_path, comm=comm)
-        self.angles_degrees = load_h5.get_angles(file, comm)
+        self.angles_degrees = load_h5.get_angles(file, comm=comm)
         self.angles_radians = np.deg2rad(self.angles_degrees[self.data_indices])
 
     def load_data(self, dim, preview=None, crop=100, pad=0):
