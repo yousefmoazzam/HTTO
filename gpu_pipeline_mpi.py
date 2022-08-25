@@ -172,13 +172,13 @@ def main():
         else:
             # use tomobar software (aslo wraps ASTRA similarly to tomopy)
             RectoolsDIR = RecToolsDIR(
-                    DetectorsDimH = detector_x,         # Horizontal detector dimension
-                    DetectorsDimV = detector_y,         # Vertical detector dimension (3D case)
-                    CenterRotOffset = rot_center,       # Center of Rotation scalar or a vector
+                    DetectorsDimH = detector_x,                 # Horizontal detector dimension
+                    DetectorsDimV = detector_y,                 # Vertical detector dimension (3D case)
+                    CenterRotOffset = detector_x*0.5 - rot_center,       # Center of Rotation scalar or a vector
                     AnglesVec = angles_radians,         # A vector of projection angles in radians
                     ObjSize = detector_x,               # Reconstructed object dimensions (scalar)
                     device_projector=GPU_index_wr_to_rank)
-            recon = RectoolsDIR.FBP(data) # perform FBP as 3D BP with Astra and then filtering
+            recon = RectoolsDIR.FBP(np.swapaxes(data, 0, 1)) # perform FBP as 3D BP with Astra and then filtering
         recon_time1 = MPI.Wtime()
         recon_time = recon_time1 - recon_time0
         print_once(f"Data reconstructed in {recon_time} seconds") 

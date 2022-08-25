@@ -165,7 +165,6 @@ def main():
                 opts = {}
                 opts['method']=args.reconstruction
                 opts['proj_type']='cuda'
-                opts['gpu_list']=[0]
                 opts['gpu_list']=[GPU_index_wr_to_rank]
                 recon = tomopy.recon(data,
                         angles_radians,
