@@ -204,5 +204,40 @@ def __calculate_GPU_index(nNodes, rank, GPUs_list):
     nGPUs = len(GPUs_list)
     return int(rank / nNodes) % nGPUs
 
+def concat_for_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
+    """Concatonate data into larger arrays for processes that will be active during gpu methods."""
+    root = comm.rank % nGPUs
+    if comm.rank == root:
+        active = True
+        data = [data]
+        for i in range(root + nGPUs, comm.size, nGPUs):
+            data.append(comm.recv(source=i, tag=0))
+    else:
+        active = False
+        comm.send(data, root, tag=0)
+    if active:
+        axis = dim - 1
+        data = np.concatenate(data, axis=axis)
+    else:
+        data = None
+    return data
+
+
+def scatter_after_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
+    """After a GPU plugin where data has been concatonated, split data back up between all processes."""
+    root = comm.rank % nGPUs
+    if comm.rank == root:
+        group_size = 0
+        for i in range(comm.rank, comm.size, nGPUs):
+            group_size += 1
+        axis = dim - 1
+        data = np.array_split(data, group_size, axis=axis)
+        for i, process_rank in enumerate(range(comm.rank + nGPUs, comm.size, nGPUs)):
+            comm.send(data[i], process_rank, tag=0)
+        data = data[0]
+    else:
+        data = comm.recv(source=root, tag=0)
+    return data
+
 if __name__ == '__main__':
     main()
