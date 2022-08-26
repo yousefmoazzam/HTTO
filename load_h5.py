@@ -36,19 +36,19 @@ def __option_parser():
     return args
 
 
-def load_data(file, dim, path, comm=MPI.COMM_WORLD, preview=":,:,:"):
+def load_data(file, dim, path, comm=MPI.COMM_WORLD, preview=":,:,:", pad=0):
     if dim == 1:
-        data = read_through_dim1(file, path, comm, preview)
+        data = read_through_dim1(file, path, comm, preview, pad)
     elif dim == 2:
-        data = read_through_dim2(file, path, comm, preview)
+        data = read_through_dim2(file, path, comm, preview, pad)
     elif dim == 3:
-        data = read_through_dim3(file, path, comm, preview)
+        data = read_through_dim3(file, path, comm, preview, pad)
     else:
         raise Exception("Invalid dimension. Choose 1, 2 or 3.")
     return data
 
 
-def read_through_dim3(file, path, comm, preview=":,:,:"):
+def read_through_dim3(file, path, comm, preview=":,:,:", pad=0):
     rank = comm.rank
     nproc = comm.size
     slice_list = get_slice_list_from_preview(preview)
@@ -64,13 +64,17 @@ def read_through_dim3(file, path, comm, preview=":,:,:"):
             step = 1 if slice_list[2].step is None else slice_list[2].step
             length = (stop - start) // step
             offset = start
-        i0 = round((length / nproc) * rank) + offset
-        i1 = round((length / nproc) * (rank + 1)) + offset
+        i0 = round((length / nproc) * rank) + offset - pad
+        i1 = round((length / nproc) * (rank + 1)) + offset + pad
+        if i0 < 0:
+            i0 = 0
+        if i1 >= dataset.shape[2]:
+            i1 = dataset.shape[2] - 1
         proc_data = dataset[:, :, i0:i1:step]
         return proc_data
 
 
-def read_through_dim2(file, path, comm, preview=":,:,:"):
+def read_through_dim2(file, path, comm, preview=":,:,:", pad=0):
     rank = comm.rank
     nproc = comm.size
     slice_list = get_slice_list_from_preview(preview)
@@ -86,13 +90,17 @@ def read_through_dim2(file, path, comm, preview=":,:,:"):
             step = 1 if slice_list[1].step is None else slice_list[1].step
             length = (stop - start)//step
             offset = start
-        i0 = round((length / nproc) * rank) + offset
-        i1 = round((length / nproc) * (rank + 1)) + offset
+        i0 = round((length / nproc) * rank) + offset - pad
+        i1 = round((length / nproc) * (rank + 1)) + offset + pad
+        if i0 < 0:
+            i0 = 0
+        if i1 >= dataset.shape[1]:
+            i1 = dataset.shape[1] - 1
         proc_data = dataset[slice_list[0], i0:i1:step, :]
         return proc_data
 
 
-def read_through_dim1(file, path, comm, preview=":,:,:"):
+def read_through_dim1(file, path, comm, preview=":,:,:", pad=0):
     rank = comm.rank
     nproc = comm.size
     slice_list = get_slice_list_from_preview(preview)
@@ -108,8 +116,12 @@ def read_through_dim1(file, path, comm, preview=":,:,:"):
             step = 1 if slice_list[0].step is None else slice_list[0].step
             length = (stop - start)//step
             offset = start
-        i0 = round((length / nproc) * rank) + offset
-        i1 = round((length / nproc) * (rank + 1)) + offset
+        i0 = round((length / nproc) * rank) + offset - pad
+        i1 = round((length / nproc) * (rank + 1)) + offset + pad
+        if i0 < 0:
+            i0 = 0
+        if i1 >= dataset.shape[0]:
+            i1 = dataset.shape[0] - 1
         proc_data = dataset[i0:i1:step, slice_list[1], slice_list[2]]
         return proc_data
 
@@ -172,7 +184,7 @@ def get_angles(file, path="/entry1/tomo_entry/data/rotation_angle", comm=MPI.COM
 
 def get_darks_flats(file, data_path="/entry1/tomo_entry/data/data",
                     image_key_path="/entry1/instrument/image_key/image_key", comm=MPI.COMM_WORLD, preview=":,:,:",
-                    dim=1):
+                    dim=1, pad=0):
     slice_list = get_slice_list_from_preview(preview)
     with h5.File(file, "r", driver="mpio", comm=comm) as file:
         darks_indices = []

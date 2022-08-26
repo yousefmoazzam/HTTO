@@ -7,26 +7,24 @@ import load_h5
 import chunk_h5
 from datetime import datetime
 import os
-from data import Data
 
 import GPUtil
+from tomobar.methodsDIR import RecToolsDIR
 
 def __option_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("in_file", help="Input data file.")
     parser.add_argument("out_folder", help="Output folder.")
     parser.add_argument("-p", "--path", default="/entry1/tomo_entry/data/data", help="Data path.")
-    parser.add_argument("-ikp", "--image_key_path", default="/entry1/tomo_entry/instrument/detector/image_key", help="Image key path.")
     parser.add_argument("-c", "--csv", default=None, help="Write results to specified csv file.")
     parser.add_argument("-r", "--repeat", type=int, default=1, help="Number of repeats.")
     parser.add_argument("-d", "--dimension", type=int, choices=[1, 2, 3], default=1,
                         help="Which dimension to slice through (usually 1 = projections, 2 = sinograms).")
     parser.add_argument("-cr", "--crop", type=int, choices=range(1, 101), default=100,
                         help="Percentage of data to process. 10 will take the middle 10% of data in the second dimension.")    
-    parser.add_argument("-rec", "--reconstruction", default="gridrec", help="The reconstruction method to apply.")
+    parser.add_argument("-rec", "--reconstruction", default="tomopy", help="The reconstruction toolbox to use for FBP CUDA: tomopy or tomobar.")
     parser.add_argument("-rings", "--stripe", default=None, help="The stripes removal method to apply.")
     parser.add_argument("-nc", "--ncore", type=int, default=1, help="The number of cores.")
-    parser.add_argument("-pa", "--pad", type=int, default=0, help="The number of slices to pad each chunk with.")
     args = parser.parse_args()
     return args
 
@@ -39,21 +37,42 @@ def main():
     for i in range(args.repeat):
         print(f"Run number: {i}")
         total_time0 = MPI.Wtime()
+        with h5.File(args.in_file, "r", driver="mpio", comm=comm) as in_file:
+            dataset = in_file[args.path]
+            shape = dataset.shape
+        print_once(f"Dataset shape is {shape}")
+        angles_degrees = load_h5.get_angles(args.in_file, comm=comm)    
+        data_indices = load_h5.get_data_indices(args.in_file,
+                                                image_key_path="/entry1/tomo_entry/instrument/detector/image_key",
+                                                comm=comm)
+        angles_radians = np.deg2rad(angles_degrees[data_indices])
+        
+        # preview to prepeare to crop the data from the middle when --crop is used to avoid loading the whole volume
+        preview = [f"{data_indices[0]}: {data_indices[-1] + 1}", ":", ":"]
+        if args.crop != 100:
+            new_length = int(round(shape[1] * args.crop/100))
+            offset = int((shape[1] - new_length) / 2)
+            preview[1] = f"{offset}: {offset + new_length}"
+            cropped_shape = (data_indices[-1] + 1 - data_indices[0], new_length, shape[2])
+        else:
+            cropped_shape = (data_indices[-1] + 1 - data_indices[0], shape[1], shape[2])
+        preview = ", ".join(preview)
 
-        data_obj = Data(args.in_file, args.path, args.image_key_path, MPI.COMM_WORLD)
-        print_once(f"Dataset shape is {data_obj.dataset_shape}")
+        print_once(f"Cropped data shape is {cropped_shape}")
 
         load_time0 = MPI.Wtime()
-        data = data_obj.get_data(args.dimension, crop=args.crop)
-        darks, flats = data_obj.get_darks_flats(args.dimension, crop=args.crop)
-        angles_radians = data_obj.angles_radians
+        data = load_h5.load_data(args.in_file, args.dimension, args.path, comm=comm, preview=preview)
         load_time1 = MPI.Wtime()
         load_time = load_time1 - load_time0
         print_once(f"Raw projection data loaded in {load_time} seconds")
 
-        (angles_total, detector_y, detector_x) = np.shape(data)
-        print(f"Process {MPI.COMM_WORLD.rank}'s data shape is {(angles_total, detector_y, detector_x)}")
+        darks, flats = load_h5.get_darks_flats(args.in_file, args.path,
+                                            image_key_path="/entry1/tomo_entry/instrument/detector/image_key",
+                                            comm=comm, preview=preview, dim=args.dimension)
 
+        (angles_total, detector_y, detector_x) = np.shape(data)
+        print(f"Process {rank}'s data shape is {(angles_total, detector_y, detector_x)}")
+        
         norm_time0 = MPI.Wtime()
         data = tomopy.normalize(data, flats, darks, ncore=args.ncore, cutoff=10)
         norm_time1 = MPI.Wtime()
@@ -132,20 +151,14 @@ def main():
             stripes_time = stripes_time1 - stripes_time0
             print_once(f"Data unstriped in {stripes_time} seconds")
 
-        # applying Paganin filter
-        #filter_time0 = MPI.Wtime()
-        #data = tomopy.prep.phase.retrieve_phase(data, ncore=args.ncore)  
-        #filter_time1 = MPI.Wtime()
-        #filter_time = filter_time1 - filter_time0
-        #print_once(f"Applying Paganin filter in {filter_time} seconds")
-
         recon_time0 = MPI.Wtime()
-        print_once(f"Using CoR {rot_center}")        
-        if args.reconstruction.isupper():
-            # use ASTRA toolbox for reconstruction ona  GPU
+        print_once(f"Using CoR {rot_center}")    
+            
+        if args.reconstruction == 'tomopy':
+            # use ASTRA toolbox for reconstruction on a GPU
             if GPUs_list is not None:
                 opts = {}
-                opts['method']=args.reconstruction
+                opts['method']='FBP_CUDA'
                 opts['proj_type']='cuda'
                 opts['gpu_list']=[GPU_index_wr_to_rank]
                 recon = tomopy.recon(data,
@@ -157,11 +170,18 @@ def main():
             else:
                 raise Exception("There are no GPUs available for reconstruction")
         else:
-            # use TomoPy methods
-            recon = tomopy.recon(np.swapaxes(data, 0, 1), angles_radians, center=rot_center, algorithm=args.reconstruction, sinogram_order=True, ncore=args.ncore)
+            # use tomobar software (aslo wraps ASTRA similarly to tomopy)
+            RectoolsDIR = RecToolsDIR(
+                    DetectorsDimH = detector_x,                 # Horizontal detector dimension
+                    DetectorsDimV = detector_y,                 # Vertical detector dimension (3D case)
+                    CenterRotOffset = detector_x*0.5 - rot_center,       # Center of Rotation scalar or a vector
+                    AnglesVec = angles_radians,         # A vector of projection angles in radians
+                    ObjSize = detector_x,               # Reconstructed object dimensions (scalar)
+                    device_projector=GPU_index_wr_to_rank)
+            recon = RectoolsDIR.FBP(np.swapaxes(data, 0, 1)) # perform FBP as 3D BP with Astra and then filtering
         recon_time1 = MPI.Wtime()
         recon_time = recon_time1 - recon_time0
-        print_once(f"Data reconstructed in {recon_time} seconds")
+        print_once(f"Data reconstructed in {recon_time} seconds") 
         
         (vert_slices, recon_x, recon_y) = np.shape(recon)
         chunks_recon = (1, recon_x, recon_y) 
@@ -183,43 +203,6 @@ def print_once(output):
 def __calculate_GPU_index(nNodes, rank, GPUs_list):
     nGPUs = len(GPUs_list)
     return int(rank / nNodes) % nGPUs
-
-
-def concat_for_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
-    """Concatonate data into larger arrays for processes that will be active during gpu methods."""
-    root = comm.rank % nGPUs
-    if comm.rank == root:
-        active = True
-        data = [data]
-        for i in range(root + nGPUs, comm.size, nGPUs):
-            data.append(comm.recv(source=i, tag=0))
-    else:
-        active = False
-        comm.send(data, root, tag=0)
-    if active:
-        axis = dim - 1
-        data = np.concatenate(data, axis=axis)
-    else:
-        data = None
-    return data
-
-
-def scatter_after_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
-    """After a GPU plugin where data has been concatonated, split data back up between all processes."""
-    root = comm.rank % nGPUs
-    if comm.rank == root:
-        group_size = 0
-        for i in range(comm.rank, comm.size, nGPUs):
-            group_size += 1
-        axis = dim - 1
-        data = np.array_split(data, group_size, axis=axis)
-        for i, process_rank in enumerate(range(comm.rank + nGPUs, comm.size, nGPUs)):
-            comm.send(data[i], process_rank, tag=0)
-        data = data[0]
-    else:
-        data = comm.recv(source=root, tag=0)
-    return data
-
 
 if __name__ == '__main__':
     main()
