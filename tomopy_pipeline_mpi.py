@@ -24,6 +24,7 @@ def __option_parser():
                         help="Percentage of data to process. 10 will take the middle 10% of data in the second dimension.")
     parser.add_argument("-m", "--methods_no", type=int, default=1, help="The number of different methods to apply to data.")
     parser.add_argument("-nc", "--ncore", type=int, default=1, help="The number of cores.")
+    parser.add_argument("-pa", "--pad", type=int, default=0, help="The number of slices to pad each chunk with.")
     args = parser.parse_args()
     return args
 
@@ -33,44 +34,21 @@ def main():
     for i in range(args.repeat):
         print(f"Run number: {i}")
         total_time0 = MPI.Wtime()
-        with h5.File(args.in_file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
-            dataset = in_file[args.path]
-            shape = dataset.shape
-        data_obj = Data(args.in_file, args.path, args.image_key_path, MPI.COMM_WORLD)
-        data_obj.load_data(args.dimension)
-        print_once(f"Dataset shape is {shape}")
-        angles_degrees = load_h5.get_angles(args.in_file, comm=MPI.COMM_WORLD)    
-        data_indices = load_h5.get_data_indices(args.in_file,
-                                                image_key_path="/entry1/tomo_entry/instrument/detector/image_key",
-                                                comm=MPI.COMM_WORLD)
-        angles_radians = np.deg2rad(angles_degrees[data_indices])
-        
-        # preview to prepeare to crop the data from the middle when --crop is used to avoid loading the whole volume
-        preview = [f"{data_indices[0]}: {data_indices[-1] + 1}", ":", ":"]
-        if args.crop != 100:
-            new_length = int(round(shape[1] * args.crop/100))
-            offset = int((shape[1] - new_length) / 2)
-            preview[1] = f"{offset}: {offset + new_length}"
-            cropped_shape = (data_indices[-1] + 1 - data_indices[0], new_length, shape[2])
-        else:
-            cropped_shape = (data_indices[-1] + 1 - data_indices[0], shape[1], shape[2])
-        preview = ", ".join(preview)
 
-        print_once(f"Cropped data shape is {cropped_shape}")
+        data_obj = Data(args.in_file, args.path, args.image_key_path, MPI.COMM_WORLD)
+        print_once(f"Dataset shape is {data_obj.dataset_shape}")
 
         load_time0 = MPI.Wtime()
-        data = load_h5.load_data(args.in_file, args.dimension, args.path, comm=MPI.COMM_WORLD, preview=preview)
+        data = data_obj.get_data(args.dimension, crop=args.crop)
+        darks, flats = data_obj.get_darks_flats(args.dimension, crop=args.crop)
+        angles_radians = data_obj.angles_radians
         load_time1 = MPI.Wtime()
         load_time = load_time1 - load_time0
         print_once(f"Raw projection data loaded in {load_time} seconds")
 
-        darks, flats = load_h5.get_darks_flats(args.in_file, args.path,
-                                            image_key_path="/entry1/tomo_entry/instrument/detector/image_key",
-                                            comm=MPI.COMM_WORLD, preview=preview, dim=args.dimension)
-
         (angles_total, detector_y, detector_x) = np.shape(data)
         print(f"Process {MPI.COMM_WORLD.rank}'s data shape is {(angles_total, detector_y, detector_x)}")
-        
+
         norm_time0 = MPI.Wtime()
         data = tomopy.normalize(data, flats, darks, ncore=args.ncore, cutoff=10)
         norm_time1 = MPI.Wtime()
