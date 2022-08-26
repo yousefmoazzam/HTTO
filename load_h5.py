@@ -68,8 +68,8 @@ def read_through_dim3(file, path, comm, preview=":,:,:", pad=0):
         i1 = round((length / nproc) * (rank + 1)) + offset + pad
         if i0 < 0:
             i0 = 0
-        if i1 >= dataset.shape[2]:
-            i1 = dataset.shape[2] - 1
+        if i1 > dataset.shape[2]:
+            i1 = dataset.shape[2]
         proc_data = dataset[:, :, i0:i1:step]
         return proc_data
 
@@ -94,8 +94,8 @@ def read_through_dim2(file, path, comm, preview=":,:,:", pad=0):
         i1 = round((length / nproc) * (rank + 1)) + offset + pad
         if i0 < 0:
             i0 = 0
-        if i1 >= dataset.shape[1]:
-            i1 = dataset.shape[1] - 1
+        if i1 > dataset.shape[1]:
+            i1 = dataset.shape[1]
         proc_data = dataset[slice_list[0], i0:i1:step, :]
         return proc_data
 
@@ -120,8 +120,8 @@ def read_through_dim1(file, path, comm, preview=":,:,:", pad=0):
         i1 = round((length / nproc) * (rank + 1)) + offset + pad
         if i0 < 0:
             i0 = 0
-        if i1 >= dataset.shape[0]:
-            i1 = dataset.shape[0] - 1
+        if i1 > dataset.shape[0]:
+            i1 = dataset.shape[0]
         proc_data = dataset[i0:i1:step, slice_list[1], slice_list[2]]
         return proc_data
 
