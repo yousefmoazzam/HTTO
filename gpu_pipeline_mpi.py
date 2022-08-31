@@ -240,7 +240,7 @@ def concat_for_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
 
 def scatter_after_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
     """After a GPU plugin where data has been concatonated, split data back up between all processes."""
-    root = comm.rank % nGPUs
+    root = comm.rank % nGPUs  # GPU process that will send this process data.
     if comm.rank == root:
         group_size = 0
         for i in range(comm.rank, comm.size, nGPUs):
@@ -257,15 +257,18 @@ def scatter_after_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
 
 def __send_big(data, dest, comm=MPI.COMM_WORLD):
     n_bytes = data.size * data.itemsize
-    n_sends = math.ceil(n_bytes / 2000000000)
-    print(f"Rank {comm.rank}: sending {n_bytes} bytes in {n_sends} blocks to rank {dest}.")
-    comm.send(n_sends, dest, tag=123456)
-    data_blocks = np.array_split(data, n_sends, axis=0)
+    # Every block must be < 2GB (MPI buffer limit)
+    n_blocks = math.ceil(n_bytes / 2000000000)
+    print(f"Rank {comm.rank}: sending {n_bytes} bytes in {n_blocks} blocks to rank {dest}.")
+    # Sending number of blocks so destination process knows how many to expect.
+    comm.send(n_blocks, dest, tag=123456)
+    data_blocks = np.array_split(data, n_blocks, axis=0)
     for i, data_block in enumerate(data_blocks):
         comm.send(data_block, dest, tag=i)
 
 
 def __recv_big(source, comm=MPI.COMM_WORLD):
+    # Sender tells reciever number of blocks to expect.
     n_recvs = comm.recv(source=source, tag=123456)
     print(f"Rank {comm.rank}: recieving {n_recvs} blocks from rank {source}.")
     data_blocks = [None] * n_recvs
