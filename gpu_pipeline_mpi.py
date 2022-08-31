@@ -171,6 +171,9 @@ def main():
                                          algorithm=tomopy.astra,
                                          options=opts,
                                          ncore=args.ncore)
+                    total_time1 = MPI.Wtime()
+                    total_time = total_time1 - total_time0
+                    print(f"Total time = {total_time} seconds.")
                 else:
                     print(f"Rank {rank}: Waiting for GPU processes.")
                     recon = data
