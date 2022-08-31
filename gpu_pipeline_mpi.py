@@ -7,6 +7,7 @@ import load_h5
 import chunk_h5
 from datetime import datetime
 import os
+import math
 
 import GPUtil
 from tomobar.methodsDIR import RecToolsDIR
@@ -221,11 +222,11 @@ def concat_for_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
     if comm.rank == root:
         active = True
         data = [data]
-        for i in range(root + nGPUs, comm.size, nGPUs):
-            data.append(comm.recv(source=i, tag=0))
+        for source in range(root + nGPUs, comm.size, nGPUs):
+            data.append(__recv_big(source, comm))
     else:
         active = False
-        comm.send(data, root, tag=0)
+        __send_big(data, root, comm)
     if active:
         axis = dim - 1
         data = np.concatenate(data, axis=axis)
@@ -243,11 +244,29 @@ def scatter_after_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
             group_size += 1
         axis = dim - 1
         data = np.array_split(data, group_size, axis=axis)
-        for i, process_rank in enumerate(range(comm.rank + nGPUs, comm.size, nGPUs)):
-            comm.send(data[i], process_rank, tag=0)
+        for i, dest in enumerate(range(comm.rank + nGPUs, comm.size, nGPUs)):
+            __send_big(data[i], dest, comm)
         data = data[0]
     else:
-        data = comm.recv(source=root, tag=0)
+        data = __recv_big(root, comm)
+    return data
+
+
+def __send_big(data, dest, comm=MPI.COMM_WORLD):
+    n_bytes = data.size * data.itemsize
+    n_sends = math.ciel(2000000000 / n_bytes)
+    comm.send(n_sends, dest, tag="n")
+    data_blocks = np.array_split(data, n_sends, axis=0)
+    for i, data_block in enumerate(data_blocks):
+        comm.send(data_block, dest, tag=i)
+
+
+def __recv_big(source, comm=MPI.COMM_WORLD):
+    n_recvs = comm.recv(source, tag="n")
+    data_blocks = [None] * n_recvs
+    for i in range(n_recvs):
+        data_blocks[i] = comm.recv(source, tag=i)
+    data = np.concatenate(data_blocks, axis=0)
     return data
 
 
