@@ -257,7 +257,7 @@ def scatter_after_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
 
 def __send_big(data, dest, comm=MPI.COMM_WORLD):
     n_bytes = data.size * data.itemsize
-    n_sends = math.ciel(2000000000 / n_bytes)
+    n_sends = math.ceil(2000000000 / n_bytes)
     comm.send(n_sends, dest, tag="n")
     data_blocks = np.array_split(data, n_sends, axis=0)
     for i, data_block in enumerate(data_blocks):

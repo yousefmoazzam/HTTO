@@ -9,8 +9,6 @@ from datetime import datetime
 import os
 from data import Data
 
-import GPUtil
-
 def __option_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("in_file", help="Input data file.")
@@ -23,13 +21,12 @@ def __option_parser():
                         help="Which dimension to slice through (usually 1 = projections, 2 = sinograms).")
     parser.add_argument("-cr", "--crop", type=int, choices=range(1, 101), default=100,
                         help="Percentage of data to process. 10 will take the middle 10% of data in the second dimension.")    
-    parser.add_argument("-rec", "--reconstruction", default="gridrec", help="The reconstruction method to apply.")
+    parser.add_argument("-rec", "--reconstruction", default="gridrec", help="The reconstruction method (from tomopy) to apply.")
     parser.add_argument("-rings", "--stripe", default=None, help="The stripes removal method to apply.")
     parser.add_argument("-nc", "--ncore", type=int, default=1, help="The number of cores.")
     parser.add_argument("-pa", "--pad", type=int, default=0, help="The number of slices to pad each chunk with.")
     args = parser.parse_args()
     return args
-
 
 def main():
     args = __option_parser()
@@ -74,13 +71,7 @@ def main():
             print("Making directory")
             os.mkdir(out_folder)
             print("Directory made")
-
-        nNodes = 1 # change this when nNodes > 1
-        GPUs_list = GPUtil.getAvailable(order='memory', limit=4) # will return a list of availble GPUs
-        GPU_index_wr_to_rank = __calculate_GPU_index(nNodes, rank, GPUs_list)
-        #print(len(GPUs_list))
-        #print(GPU_index_wr_to_rank)
-        
+       
         # calculate the chunk size for the projection data
         slices_no_in_chunks = 4
         if (args.dimension == 1):
@@ -132,39 +123,15 @@ def main():
             stripes_time = stripes_time1 - stripes_time0
             print_once(f"Data unstriped in {stripes_time} seconds")
 
-        # applying Paganin filter
-        #filter_time0 = MPI.Wtime()
-        #data = tomopy.prep.phase.retrieve_phase(data, ncore=args.ncore)  
-        #filter_time1 = MPI.Wtime()
-        #filter_time = filter_time1 - filter_time0
-        #print_once(f"Applying Paganin filter in {filter_time} seconds")
-
         recon_time0 = MPI.Wtime()
         print_once(f"Using CoR {rot_center}")        
-        if args.reconstruction.isupper():
-            # use ASTRA toolbox for reconstruction ona  GPU
-            if GPUs_list is not None:
-                opts = {}
-                opts['method']=args.reconstruction
-                opts['proj_type']='cuda'
-                opts['gpu_list']=[GPU_index_wr_to_rank]
-                recon = tomopy.recon(data,
-                        angles_radians,
-                        center=rot_center,
-                        algorithm=tomopy.astra,
-                        options=opts,
-                        ncore=args.ncore)
-            else:
-                raise Exception("There are no GPUs available for reconstruction")
-        else:
-            # use TomoPy methods
-            recon = tomopy.recon(np.swapaxes(data, 0, 1), angles_radians, center=rot_center, algorithm=args.reconstruction, sinogram_order=True, ncore=args.ncore)
+        recon = tomopy.recon(np.swapaxes(data, 0, 1), angles_radians, center=rot_center, algorithm=args.reconstruction, sinogram_order=True, ncore=args.ncore)
         recon_time1 = MPI.Wtime()
         recon_time = recon_time1 - recon_time0
         print_once(f"Data reconstructed in {recon_time} seconds")
         
         (vert_slices, recon_x, recon_y) = np.shape(recon)
-        chunks_recon = (1, recon_x, recon_y) 
+        chunks_recon = (1, recon_x, recon_y) # larger than one breaks mpirun on a node?
         
         save_recon_time0 = MPI.Wtime()
         chunk_h5.save_dataset(out_folder, "reconstruction.h5", recon, 1, chunks_recon, comm=comm)
@@ -180,46 +147,5 @@ def print_once(output):
     if MPI.COMM_WORLD.rank == 0:
         print(output)
         
-def __calculate_GPU_index(nNodes, rank, GPUs_list):
-    nGPUs = len(GPUs_list)
-    return int(rank / nNodes) % nGPUs
-
-
-def concat_for_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
-    """Concatonate data into larger arrays for processes that will be active during gpu methods."""
-    root = comm.rank % nGPUs
-    if comm.rank == root:
-        active = True
-        data = [data]
-        for i in range(root + nGPUs, comm.size, nGPUs):
-            data.append(comm.recv(source=i, tag=0))
-    else:
-        active = False
-        comm.send(data, root, tag=0)
-    if active:
-        axis = dim - 1
-        data = np.concatenate(data, axis=axis)
-    else:
-        data = None
-    return data
-
-
-def scatter_after_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
-    """After a GPU plugin where data has been concatonated, split data back up between all processes."""
-    root = comm.rank % nGPUs
-    if comm.rank == root:
-        group_size = 0
-        for i in range(comm.rank, comm.size, nGPUs):
-            group_size += 1
-        axis = dim - 1
-        data = np.array_split(data, group_size, axis=axis)
-        for i, process_rank in enumerate(range(comm.rank + nGPUs, comm.size, nGPUs)):
-            comm.send(data[i], process_rank, tag=0)
-        data = data[0]
-    else:
-        data = comm.recv(source=root, tag=0)
-    return data
-
-
 if __name__ == '__main__':
     main()
