@@ -64,7 +64,8 @@ def main():
         print_once(f"Cropped data shape is {cropped_shape}")
 
         load_time0 = MPI.Wtime()
-        data = load_h5.load_data(args.in_file, args.dimension, args.path, comm=comm, preview=preview)
+        dim = args.dimension
+        data = load_h5.load_data(args.in_file, dim, args.path, comm=comm, preview=preview)
         load_time1 = MPI.Wtime()
         load_time = load_time1 - load_time0
         print_once(f"Raw projection data loaded in {load_time} seconds")
@@ -112,7 +113,6 @@ def main():
 
         if args.dimension == 1:
             save_time0 = MPI.Wtime()
-            print(f"Rank = {rank}")
             chunk_h5.save_dataset(out_folder, "intermediate.h5", data, args.dimension, chunks_data, comm=comm)
             save_time1 = MPI.Wtime()
             save_time = save_time1 - save_time0
@@ -121,6 +121,7 @@ def main():
             slicing_dim = 2  # assuming sinogram slicing here to get it loaded
             reload_time0 = MPI.Wtime()
             data = load_h5.load_data(f"{out_folder}/intermediate.h5", slicing_dim, "/data", comm=comm)
+            dim = slicing_dim
             reload_time1 = MPI.Wtime()
             reload_time = reload_time1 - reload_time0
             print_once(f"Data reloaded in {reload_time} seconds")
@@ -172,13 +173,10 @@ def main():
                                          algorithm=tomopy.astra,
                                          options=opts,
                                          ncore=args.ncore)
-                    total_time1 = MPI.Wtime()
-                    total_time = total_time1 - total_time0
-                    print(f"Total time = {total_time} seconds.")
                 else:
                     print(f"Rank {rank}: Waiting for GPU processes.")
                     recon = data
-                recon = np.swapaxes(scatter_after_gpu(recon, 2, len(GPUs_list), comm), 0, 1)
+                recon = scatter_after_gpu(recon, 2, len(GPUs_list), comm)
                 print(recon.shape)
             else:
                 raise Exception("There are no GPUs available for reconstruction")
@@ -192,6 +190,7 @@ def main():
                 ObjSize=detector_x,  # Reconstructed object dimensions (scalar)
                 device_projector=GPU_index_wr_to_rank)
             recon = RectoolsDIR.FBP(np.swapaxes(data, 0, 1))  # perform FBP as 3D BP with Astra and then filtering
+            dim = 1  # As data has axes swapped
         recon_time1 = MPI.Wtime()
         recon_time = recon_time1 - recon_time0
         print_once(f"Data reconstructed in {recon_time} seconds")
@@ -200,7 +199,7 @@ def main():
         chunks_recon = (1, recon_x, recon_y)
 
         save_recon_time0 = MPI.Wtime()
-        chunk_h5.save_dataset(out_folder, "reconstruction.h5", recon, 1, chunks_recon, comm=comm)
+        chunk_h5.save_dataset(out_folder, "reconstruction.h5", recon, dim, chunks_recon, comm=comm)
         save_recon_time1 = MPI.Wtime()
         save_recon_time = save_recon_time1 - save_recon_time0
         print_once(f"Reconstruction saved in {save_recon_time} seconds")
@@ -259,6 +258,7 @@ def scatter_after_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
 def __send_big(data, dest, comm=MPI.COMM_WORLD):
     n_bytes = data.size * data.itemsize
     n_sends = math.ceil(n_bytes / 2000000000)
+    print(f"Rank {comm.rank}: sending {n_bytes} bytes in {n_sends} blocks to rank {dest}.")
     comm.send(n_sends, dest, tag=123456)
     data_blocks = np.array_split(data, n_sends, axis=0)
     for i, data_block in enumerate(data_blocks):
@@ -267,6 +267,7 @@ def __send_big(data, dest, comm=MPI.COMM_WORLD):
 
 def __recv_big(source, comm=MPI.COMM_WORLD):
     n_recvs = comm.recv(source=source, tag=123456)
+    print(f"Rank {comm.rank}: recieving {n_recvs} blocks from rank {source}.")
     data_blocks = [None] * n_recvs
     for i in range(n_recvs):
         data_blocks[i] = comm.recv(source=source, tag=i)

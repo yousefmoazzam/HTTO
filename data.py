@@ -20,6 +20,7 @@ class Data:
         self.file = file
         self.data_path = path
         self.image_key_path = image_key_path
+        self.dim = None
         with h5.File(file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
             self.dataset = in_file[path]
             self.dataset_shape = self.dataset.shape
@@ -29,6 +30,7 @@ class Data:
         self.angles_radians = np.deg2rad(self.angles_degrees[self.data_indices])
 
     def get_data(self, dim, preview=None, crop=100, pad=0):
+        self.dim = dim
         if preview is None:
             preview = [f"{self.data_indices[0]}: {self.data_indices[-1] + 1}", ":", ":"]
         else:
