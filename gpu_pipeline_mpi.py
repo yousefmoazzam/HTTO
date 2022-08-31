@@ -126,6 +126,32 @@ def main():
             reload_time = reload_time1 - reload_time0
             print_once(f"Data reloaded in {reload_time} seconds")
 
+        # trying to denoise the datausing CCPi-regularisation 
+        from ccpi.filters.regularisers import PD_TV
+        
+        # set parameters
+        pars = {'algorithm' : PD_TV, \
+                'input' : data,\
+                'regularisation_parameter': 0.0000001, \
+                'number_of_iterations' : 500 ,\
+                'tolerance_constant':1e-06,\
+                'methodTV': 0 ,\
+                'nonneg': 0,
+                'lipschitz_const' : 8}
+        
+        denoise_time0 = MPI.Wtime()
+        (data, info_vec_gpu)  = PD_TV(pars['input'], 
+              pars['regularisation_parameter'],
+              pars['number_of_iterations'],
+              pars['tolerance_constant'], 
+              pars['methodTV'],
+              pars['nonneg'],
+              pars['lipschitz_const'],
+              GPU_index_wr_to_rank)        
+        denoise_time1 = MPI.Wtime()
+        denoise_time = denoise_time1 - denoise_time0
+        print_once(f"GPU denoising took {denoise_time} seconds")
+
         # calculating the center of rotation
         center_time0 = MPI.Wtime()
         rot_center = 0
@@ -152,7 +178,7 @@ def main():
             stripes_time1 = MPI.Wtime()
             stripes_time = stripes_time1 - stripes_time0
             print_once(f"Data unstriped in {stripes_time} seconds")
-
+            
         recon_time0 = MPI.Wtime()
         print_once(f"Using CoR {rot_center}")
         print_once(f"Number of GPUs = {len(GPUs_list)}")       
