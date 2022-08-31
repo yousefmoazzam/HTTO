@@ -91,7 +91,7 @@ def main():
         print_once(f"Minus log process executed in {min_log_time} seconds")
 
         abs_out_folder = os.path.abspath(args.out_folder)
-        out_folder = f"{abs_out_folder}/{datetime.now().strftime('%d-%m-%Y_%H_%M_%S')}_recon"
+        out_folder = f"{abs_out_folder}/{datetime.now().strftime('%d-%m-%Y_%H:%M:%S')}_recon"
         if rank == 0:
             print("Making directory")
             os.mkdir(out_folder)
