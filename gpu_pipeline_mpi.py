@@ -112,6 +112,7 @@ def main():
 
         if args.dimension == 1:
             save_time0 = MPI.Wtime()
+            print(f"Rank = {rank}")
             chunk_h5.save_dataset(out_folder, "intermediate.h5", data, args.dimension, chunks_data, comm=comm)
             save_time1 = MPI.Wtime()
             save_time = save_time1 - save_time0
@@ -248,7 +249,7 @@ def scatter_after_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
         axis = dim - 1
         data = np.array_split(data, group_size, axis=axis)
         for i, dest in enumerate(range(comm.rank + nGPUs, comm.size, nGPUs)):
-            __send_big(data[i], dest, comm)
+            __send_big(data[i + 1], dest, comm)
         data = data[0]
     else:
         data = __recv_big(root, comm)
@@ -257,18 +258,18 @@ def scatter_after_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
 
 def __send_big(data, dest, comm=MPI.COMM_WORLD):
     n_bytes = data.size * data.itemsize
-    n_sends = math.ceil(2000000000 / n_bytes)
-    comm.send(n_sends, dest, tag="n")
+    n_sends = math.ceil(n_bytes / 2000000000)
+    comm.send(n_sends, dest, tag=123456)
     data_blocks = np.array_split(data, n_sends, axis=0)
     for i, data_block in enumerate(data_blocks):
         comm.send(data_block, dest, tag=i)
 
 
 def __recv_big(source, comm=MPI.COMM_WORLD):
-    n_recvs = comm.recv(source, tag="n")
+    n_recvs = comm.recv(source=source, tag=123456)
     data_blocks = [None] * n_recvs
     for i in range(n_recvs):
-        data_blocks[i] = comm.recv(source, tag=i)
+        data_blocks[i] = comm.recv(source=source, tag=i)
     data = np.concatenate(data_blocks, axis=0)
     return data
 
