@@ -92,7 +92,7 @@ def main():
         print_once(f"Minus log process executed in {min_log_time} seconds")
 
         abs_out_folder = os.path.abspath(args.out_folder)
-        out_folder = f"{abs_out_folder}/{datetime.now().strftime('%d-%m-%Y_%H:%M:%S')}_recon"
+        out_folder = f"{abs_out_folder}/{datetime.now().strftime('%d-%m-%Y_%H_%M_%S')}_recon"
         if rank == 0:
             print("Making directory")
             os.mkdir(out_folder)
@@ -126,6 +126,32 @@ def main():
             reload_time = reload_time1 - reload_time0
             print_once(f"Data reloaded in {reload_time} seconds")
 
+        # trying to denoise the datausing CCPi-regularisation 
+        from ccpi.filters.regularisers import PD_TV
+        
+        # set parameters
+        pars = {'algorithm' : PD_TV, \
+                'input' : data,\
+                'regularisation_parameter': 0.0000001, \
+                'number_of_iterations' : 500 ,\
+                'tolerance_constant':1e-06,\
+                'methodTV': 0 ,\
+                'nonneg': 0,
+                'lipschitz_const' : 8}
+        
+        denoise_time0 = MPI.Wtime()
+        (data, info_vec_gpu)  = PD_TV(pars['input'], 
+              pars['regularisation_parameter'],
+              pars['number_of_iterations'],
+              pars['tolerance_constant'], 
+              pars['methodTV'],
+              pars['nonneg'],
+              pars['lipschitz_const'],
+              GPU_index_wr_to_rank)        
+        denoise_time1 = MPI.Wtime()
+        denoise_time = denoise_time1 - denoise_time0
+        print_once(f"GPU denoising took {denoise_time} seconds")
+
         # calculating the center of rotation
         center_time0 = MPI.Wtime()
         rot_center = 0
@@ -152,16 +178,16 @@ def main():
             stripes_time1 = MPI.Wtime()
             stripes_time = stripes_time1 - stripes_time0
             print_once(f"Data unstriped in {stripes_time} seconds")
-
+            
         recon_time0 = MPI.Wtime()
         print_once(f"Using CoR {rot_center}")
-
-        print_once(f"Number of GPUs = {len(GPUs_list)}")
-        if args.reconstruction == 'tomopy':
-            # use ASTRA toolbox for reconstruction on a GPU
-            if GPUs_list is not None:
-                data = concat_for_gpu(data, 2, len(GPUs_list), comm)
-                if data is not None:
+        print_once(f"Number of GPUs = {len(GPUs_list)}")       
+        
+        if GPUs_list is not None:
+            data = concat_for_gpu(data, 2, len(GPUs_list), comm)                      
+            if data is not None:
+                if args.reconstruction == 'tomopy':
+                    # use Tomopy-ASTRA toolbox for reconstruction on a GPU
                     print(f"Rank {rank}: GPU reconstruction.")
                     opts = {}
                     opts['method'] = 'FBP_CUDA'
@@ -174,23 +200,25 @@ def main():
                                          options=opts,
                                          ncore=args.ncore)
                 else:
-                    print(f"Rank {rank}: Waiting for GPU processes.")
-                    recon = data
-                recon = scatter_after_gpu(recon, 2, len(GPUs_list), comm)
-                print(recon.shape)
+                    # using ToMoBAR software (aslo wraps ASTRA similarly to tomopy)
+                    print(data.shape)
+                    RectoolsDIR = RecToolsDIR(
+                        DetectorsDimH=detector_x,  # Horizontal detector dimension
+                        DetectorsDimV=np.size(data, 1),  # Vertical detector dimension (3D case)
+                        CenterRotOffset=detector_x * 0.5 - rot_center,  # Center of Rotation scalar or a vector
+                        AnglesVec=angles_radians,  # A vector of projection angles in radians
+                        ObjSize=detector_x,  # Reconstructed object dimensions (scalar)
+                        device_projector=GPU_index_wr_to_rank)
+                    recon = RectoolsDIR.FBP(np.swapaxes(data, 0, 1))  # perform FBP as 3D BP with Astra and then filtering
+                    #print(recon.shape)
+                    #dim = 1  # As data has axes swapped
             else:
-                raise Exception("There are no GPUs available for reconstruction")
+                print(f"Rank {rank}: Waiting for GPU processes.")
+                recon = data
+            recon = scatter_after_gpu(recon, 2, len(GPUs_list), comm)
+            #print(recon.shape)
         else:
-            # use tomobar software (aslo wraps ASTRA similarly to tomopy)
-            RectoolsDIR = RecToolsDIR(
-                DetectorsDimH=detector_x,  # Horizontal detector dimension
-                DetectorsDimV=detector_y,  # Vertical detector dimension (3D case)
-                CenterRotOffset=detector_x * 0.5 - rot_center,  # Center of Rotation scalar or a vector
-                AnglesVec=angles_radians,  # A vector of projection angles in radians
-                ObjSize=detector_x,  # Reconstructed object dimensions (scalar)
-                device_projector=GPU_index_wr_to_rank)
-            recon = RectoolsDIR.FBP(np.swapaxes(data, 0, 1))  # perform FBP as 3D BP with Astra and then filtering
-            dim = 1  # As data has axes swapped
+            raise Exception("There are no GPUs available for reconstruction")
         recon_time1 = MPI.Wtime()
         recon_time = recon_time1 - recon_time0
         print_once(f"Data reconstructed in {recon_time} seconds")
