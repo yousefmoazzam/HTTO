@@ -220,42 +220,55 @@ def __calculate_GPU_index(nNodes, rank, GPUs_list):
 
 
 def concat_for_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
-    """Concatonate data into larger arrays for processes that will be active during gpu methods."""
-    root = comm.rank % nGPUs
-    if comm.rank == root:
-        active = True
+    """Give all the data to GPU processes by concatenating it into larger arrays.
+    :param data: Data to be concatenated.
+    :param dim: Dimension along which to concatenate (1, 2, 3).
+    :param nGPUs: Number of GPUs, which corresponds to number of processes the data will be split between.
+    :param comm: MPI communicator object.
+    """
+    my_gpu_proc = comm.rank % nGPUs  # GPU process that will receive data from this process.
+    if comm.rank == my_gpu_proc:  # This is a GPU process
         data = [data]
-        for source in range(root + nGPUs, comm.size, nGPUs):
+        # Creating a list of data blocks.
+        for source in range(my_gpu_proc + nGPUs, comm.size, nGPUs):
             data.append(__recv_big(source, comm))
-    else:
-        active = False
-        __send_big(data, root, comm)
-    if active:
-        axis = dim - 1
+        axis = dim - 1  # Dim 1 = axis 0
         data = np.concatenate(data, axis=axis)
-    else:
+    else:  # This is not a GPU process
+        __send_big(data, my_gpu_proc, comm)
         data = None
     return data
 
 
 def scatter_after_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
-    """After a GPU plugin where data has been concatonated, split data back up between all processes."""
-    root = comm.rank % nGPUs  # GPU process that will send this process data.
-    if comm.rank == root:
+    """After a GPU method where data has been concatenated using concat_for_gpu(), split data back up between all processes.
+    :param data: Data to be scattered.
+    :param dim: Dimension along which data has been concatenated, so data can be split along the same dimension.
+    :param nGPUs: Number of GPUs. This is the number of processes who currently have all the data.
+    :param comm: MPI communicator object.
+    """
+    my_gpu_proc = comm.rank % nGPUs  # GPU process that will send this process data.
+    if comm.rank == my_gpu_proc:  # This is a GPU process
         group_size = 0
         for i in range(comm.rank, comm.size, nGPUs):
-            group_size += 1
+            group_size += 1  # Number of processes this gpu process has to send data to.
         axis = dim - 1
+        # Splitting data into blocks
         data = np.array_split(data, group_size, axis=axis)
         for i, dest in enumerate(range(comm.rank + nGPUs, comm.size, nGPUs)):
-            __send_big(data[i + 1], dest, comm)
+            __send_big(data[i + 1], dest, comm)  # Keeping
         data = data[0]
-    else:
-        data = __recv_big(root, comm)
+    else:  # This is not a GPU process
+        data = __recv_big(my_gpu_proc, comm)
     return data
 
 
 def __send_big(data, dest, comm=MPI.COMM_WORLD):
+    """Send data between MPI processes that exceeds the 2GB MPI buffer limit.
+    :param data: Data to be sent.
+    :param dest: Rank of the process receiving the data.
+    :param comm: MPI communicator object
+    """
     n_bytes = data.size * data.itemsize
     # Every block must be < 2GB (MPI buffer limit)
     n_blocks = math.ceil(n_bytes / 2000000000)
@@ -264,16 +277,20 @@ def __send_big(data, dest, comm=MPI.COMM_WORLD):
     comm.send(n_blocks, dest, tag=123456)
     data_blocks = np.array_split(data, n_blocks, axis=0)
     for i, data_block in enumerate(data_blocks):
-        comm.send(data_block, dest, tag=i)
+        comm.send(data_block, dest, tag=i)  # Tag to ensure messages arrive in correct order - may not be needed
 
 
 def __recv_big(source, comm=MPI.COMM_WORLD):
-    # Sender tells reciever number of blocks to expect.
-    n_recvs = comm.recv(source=source, tag=123456)
-    print(f"Rank {comm.rank}: recieving {n_recvs} blocks from rank {source}.")
-    data_blocks = [None] * n_recvs
-    for i in range(n_recvs):
-        data_blocks[i] = comm.recv(source=source, tag=i)
+    """Receive data that has been sent using the __send_big() function.
+    :param source: Rank of the process sending the data.
+    :param comm: MPI communicator object.
+    """
+    # Sender tells receiver number of blocks to expect.
+    n_blocks = comm.recv(source=source, tag=123456)
+    print(f"Rank {comm.rank}: recieving {n_blocks} blocks from rank {source}.")
+    data_blocks = [None] * n_blocks
+    for i in range(n_blocks):
+        data_blocks[i] = comm.recv(source=source, tag=i)  # Tag to ensure messages arrive in correct order
     data = np.concatenate(data_blocks, axis=0)
     return data
 

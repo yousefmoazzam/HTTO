@@ -36,7 +36,15 @@ def __option_parser():
     return args
 
 
-def load_data(file, dim, path, comm=MPI.COMM_WORLD, preview=":,:,:", pad=0):
+def load_data(file, dim, path, preview=":,:,:", pad=0, comm=MPI.COMM_WORLD):
+    """Load data in parallel, slicing it through a certain dimension.
+    :param file: Path to file containing the dataset.
+    :param dim: Dimension along which data is sliced when being split between MPI processes.
+    :param path: Path to dataset within the file.
+    :param preview: Crop the data with a preview:
+    :param pad: Pad the data by this number of slices. (needs looking at)
+    :param comm: MPI communicator object.
+    """
     if dim == 1:
         data = read_through_dim1(file, path, comm, preview, pad)
     elif dim == 2:
@@ -48,12 +56,20 @@ def load_data(file, dim, path, comm=MPI.COMM_WORLD, preview=":,:,:", pad=0):
     return data
 
 
-def read_through_dim3(file, path, comm, preview=":,:,:", pad=0):
+def read_through_dim3(file, path, preview=":,:,:", pad=0, comm=MPI.COMM_WORLD):
+    """Read a dataset in parallel, with each MPI process loading a block, the data being split along dimension 3.
+    :param file: Path to file containing the dataset.
+    :param path: Path to dataset within the file.
+    :param preview: Crop the data with a preview.
+    :param pad: Pad the data by this number of slices. (needs looking at)
+    :param comm: MPI communicator object.
+    """
     rank = comm.rank
     nproc = comm.size
     slice_list = get_slice_list_from_preview(preview)
     with h5.File(file, "r", driver="mpio", comm=comm) as in_file:
         dataset = in_file[path]
+        # Turning the preview into a length and offset. Data will be read from data[offset] to data[offset + length].
         if slice_list[2] == slice(None):
             length = dataset.shape[2]
             offset = 0
@@ -62,24 +78,34 @@ def read_through_dim3(file, path, comm, preview=":,:,:", pad=0):
             start = 0 if slice_list[2].start is None else slice_list[1].start
             stop = dataset.shape[2] if slice_list[2].stop is None else slice_list[2].stop
             step = 1 if slice_list[2].step is None else slice_list[2].step
-            length = (stop - start) // step
-            offset = start
+            length = (stop - start) // step  # Total length of the section of the dataset being read.
+            offset = start  # Offset where the dataset will start being read.
+        # Bounds of the data this process will load. Length is split between number of processes.
         i0 = round((length / nproc) * rank) + offset - pad
         i1 = round((length / nproc) * (rank + 1)) + offset + pad
+        # Checking that i0 and i1 are still within the bounds of the dataset after padding.
         if i0 < 0:
             i0 = 0
         if i1 > dataset.shape[2]:
             i1 = dataset.shape[2]
-        proc_data = dataset[:, :, i0:i1:step]
-        return proc_data
+        data = dataset[:, :, i0:i1:step]
+        return data
 
 
-def read_through_dim2(file, path, comm, preview=":,:,:", pad=0):
+def read_through_dim2(file, path, preview=":,:,:", pad=0, comm=MPI.COMM_WORLD):
+    """Read a dataset in parallel, with each MPI process loading a block, the data being split along dimension 2.
+    :param file: Path to file containing the dataset.
+    :param path: Path to dataset within the file.
+    :param preview: Crop the data with a preview.
+    :param pad: Pad the data by this number of slices. (needs looking at)
+    :param comm: MPI communicator object.
+    """
     rank = comm.rank
     nproc = comm.size
     slice_list = get_slice_list_from_preview(preview)
     with h5.File(file, "r", driver="mpio", comm=comm) as in_file:
         dataset = in_file[path]
+        # Turning the preview into a length and offset. Data will be read from data[offset] to data[offset + length].
         if slice_list[1] == slice(None):
             length = dataset.shape[1]
             offset = 0
@@ -88,24 +114,34 @@ def read_through_dim2(file, path, comm, preview=":,:,:", pad=0):
             start = 0 if slice_list[1].start is None else slice_list[1].start
             stop = dataset.shape[1] if slice_list[1].stop is None else slice_list[1].stop
             step = 1 if slice_list[1].step is None else slice_list[1].step
-            length = (stop - start)//step
-            offset = start
+            length = (stop - start)//step  # Total length of the section of the dataset being read.
+            offset = start  # Offset where the dataset will start being read.
+        # Bounds of the data this process will load. Length is split between number of processes.
         i0 = round((length / nproc) * rank) + offset - pad
         i1 = round((length / nproc) * (rank + 1)) + offset + pad
+        # Checking that i0 and i1 are still within the bounds of the dataset after padding.
         if i0 < 0:
             i0 = 0
         if i1 > dataset.shape[1]:
             i1 = dataset.shape[1]
-        proc_data = dataset[slice_list[0], i0:i1:step, :]
-        return proc_data
+        data = dataset[slice_list[0], i0:i1:step, :]
+        return data
 
 
-def read_through_dim1(file, path, comm, preview=":,:,:", pad=0):
+def read_through_dim1(file, path, preview=":,:,:", pad=0, comm=MPI.COMM_WORLD):
+    """Read a dataset in parallel, with each MPI process loading a block, the data being split along dimension 1.
+    :param file: Path to file containing the dataset.
+    :param path: Path to dataset within the file.
+    :param preview: Crop the data with a preview.
+    :param pad: Pad the data by this number of slices. (needs looking at)
+    :param comm: MPI communicator object.
+    """
     rank = comm.rank
     nproc = comm.size
     slice_list = get_slice_list_from_preview(preview)
     with h5.File(file, "r", driver="mpio", comm=comm) as in_file:
         dataset = in_file[path]
+        # Turning the preview into a length and offset. Data will be read from data[offset] to data[offset + length].
         if slice_list[0] == slice(None):
             length = dataset.shape[0]
             offset = 0
@@ -114,16 +150,18 @@ def read_through_dim1(file, path, comm, preview=":,:,:", pad=0):
             start = 0 if slice_list[0].start is None else slice_list[0].start
             stop = dataset.shape[0] if slice_list[0].stop is None else slice_list[0].stop
             step = 1 if slice_list[0].step is None else slice_list[0].step
-            length = (stop - start)//step
-            offset = start
+            length = (stop - start)//step  # Total length of the section of the dataset being read.
+            offset = start  # Offset where the dataset will start being read.
+        # Bounds of the data this process will load. Length is split between number of processes.
         i0 = round((length / nproc) * rank) + offset - pad
         i1 = round((length / nproc) * (rank + 1)) + offset + pad
+        # Checking that i0 and i1 are still within the bounds of the dataset after padding.
         if i0 < 0:
             i0 = 0
         if i1 > dataset.shape[0]:
             i1 = dataset.shape[0]
-        proc_data = dataset[i0:i1:step, slice_list[1], slice_list[2]]
-        return proc_data
+        data = dataset[i0:i1:step, slice_list[1], slice_list[2]]
+        return data
 
 
 def read_chunks(file, path, comm):
@@ -177,14 +215,28 @@ def read_chunks(file, path, comm):
 
 
 def get_angles(file, path="/entry1/tomo_entry/data/rotation_angle", comm=MPI.COMM_WORLD):
+    """Get angles.
+    :param file: Path to file containing the data and angles.
+    :param path: Path to the angles within the file.
+    :param comm: MPI communicator object.
+    """
     with h5.File(file, "r", driver="mpio", comm=comm) as file:
         angles = file[path][...]
     return angles
 
 
 def get_darks_flats(file, data_path="/entry1/tomo_entry/data/data",
-                    image_key_path="/entry1/instrument/image_key/image_key", comm=MPI.COMM_WORLD, preview=":,:,:",
-                    dim=1, pad=0):
+                    image_key_path="/entry1/instrument/image_key/image_key", dim=1, pad=0, preview=":,:,:",
+                    comm=MPI.COMM_WORLD):
+    """Get darks and flats.
+    :param file: Path to file containing the dataset.
+    :param data_path: Path to the dataset within the file.
+    :param image_key_path: Path to the image_key within the file.
+    :param dim: Dimension along which data is being split between MPI processes. Only effects darks and flats if dim = 2.
+    :param pad: How many slices data is being padded. Only effects darks and flats if dim = 2. (not implemented yet)
+    :param preview: Preview data is being cropped by.
+    :param comm: MPI communicator object.
+    """
     slice_list = get_slice_list_from_preview(preview)
     with h5.File(file, "r", driver="mpio", comm=comm) as file:
         darks_indices = []
@@ -220,6 +272,11 @@ def get_darks_flats(file, data_path="/entry1/tomo_entry/data/data",
 
 
 def get_data_indices(file, image_key_path="/entry1/instrument/image_key/image_key", comm=MPI.COMM_WORLD):
+    """Get the indices of where the data is in a dataset.
+    :param file: Path to the file containing the dataset and image key.
+    :param image_key_path: Path to the image key within the file.
+    :param comm: MPI communicator object.
+    """
     with h5.File(file, "r", driver="mpio", comm=comm) as file:
         data_indices = []
         for i, key in enumerate(file[image_key_path]):
@@ -229,6 +286,9 @@ def get_data_indices(file, image_key_path="/entry1/instrument/image_key/image_ke
 
 
 def get_slice_list_from_preview(preview):
+    """Generate slice list to crop data from a preview.
+    :param preview: Preview in the form 'start: stop: step, start: stop: step, start: stop: step'.
+    """
     slice_list = [None] * 3
     preview = preview.split(",")
     for dimension, value in enumerate(preview):
