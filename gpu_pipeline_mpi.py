@@ -9,7 +9,7 @@ from datetime import datetime
 import os
 import math
 
-import GPUtil
+#import GPUtil
 from tomobar.methodsDIR import RecToolsDIR
 
 
@@ -28,6 +28,7 @@ def __option_parser():
                         help="The reconstruction toolbox to use for FBP CUDA: tomopy or tomobar.")
     parser.add_argument("-rings", "--stripe", default=None, help="The stripes removal method to apply.")
     parser.add_argument("-nc", "--ncore", type=int, default=1, help="The number of cores.")
+    parser.add_argument("-pad", "--pad", type=int, default=0, help="Number of slices to pad each block of data.")
     args = parser.parse_args()
     return args
 
@@ -50,7 +51,8 @@ def main():
                                                 comm=comm)
         angles_radians = np.deg2rad(angles_degrees[data_indices])
 
-        # preview to prepeare to crop the data from the middle when --crop is used to avoid loading the whole volume
+        # preview to prepare to crop the data from the middle when --crop is used to avoid loading the whole volume.
+        # and crop out darks and flats when loading data.
         preview = [f"{data_indices[0]}: {data_indices[-1] + 1}", ":", ":"]
         if args.crop != 100:
             new_length = int(round(shape[1] * args.crop / 100))
@@ -65,7 +67,9 @@ def main():
 
         load_time0 = MPI.Wtime()
         dim = args.dimension
-        data = load_h5.load_data(args.in_file, dim, args.path, comm=comm, preview=preview)
+        pad_values = load_h5.get_pad_values(args.pad, dim, shape[dim - 1], data_indices=data_indices, preview=preview, comm=comm)
+        print(f"Rank: {rank}: pad values are {pad_values}.")
+        data = load_h5.load_data(args.in_file, dim, args.path, preview=preview, pad=pad_values, comm=comm)
         load_time1 = MPI.Wtime()
         load_time = load_time1 - load_time0
         print_once(f"Raw projection data loaded in {load_time} seconds")

@@ -36,32 +36,32 @@ def __option_parser():
     return args
 
 
-def load_data(file, dim, path, preview=":,:,:", pad=0, comm=MPI.COMM_WORLD):
+def load_data(file, dim, path, preview=":,:,:", pad=(0, 0), comm=MPI.COMM_WORLD):
     """Load data in parallel, slicing it through a certain dimension.
     :param file: Path to file containing the dataset.
     :param dim: Dimension along which data is sliced when being split between MPI processes.
     :param path: Path to dataset within the file.
     :param preview: Crop the data with a preview:
-    :param pad: Pad the data by this number of slices. (needs looking at)
+    :param pad: Pad the data by this number of slices.
     :param comm: MPI communicator object.
     """
     if dim == 1:
-        data = read_through_dim1(file, path, comm, preview, pad)
+        data = read_through_dim1(file, path, preview=preview, pad=pad, comm=comm)
     elif dim == 2:
-        data = read_through_dim2(file, path, comm, preview, pad)
+        data = read_through_dim2(file, path, preview=preview, pad=pad, comm=comm)
     elif dim == 3:
-        data = read_through_dim3(file, path, comm, preview, pad)
+        data = read_through_dim3(file, path, preview=preview, pad=pad, comm=comm)
     else:
         raise Exception("Invalid dimension. Choose 1, 2 or 3.")
     return data
 
 
-def read_through_dim3(file, path, preview=":,:,:", pad=0, comm=MPI.COMM_WORLD):
+def read_through_dim3(file, path, preview=":,:,:", pad=(0, 0), comm=MPI.COMM_WORLD):
     """Read a dataset in parallel, with each MPI process loading a block, the data being split along dimension 3.
     :param file: Path to file containing the dataset.
     :param path: Path to dataset within the file.
     :param preview: Crop the data with a preview.
-    :param pad: Pad the data by this number of slices. (needs looking at)
+    :param pad: Pad the data by this number of slices.
     :param comm: MPI communicator object.
     """
     rank = comm.rank
@@ -81,8 +81,8 @@ def read_through_dim3(file, path, preview=":,:,:", pad=0, comm=MPI.COMM_WORLD):
             length = (stop - start) // step  # Total length of the section of the dataset being read.
             offset = start  # Offset where the dataset will start being read.
         # Bounds of the data this process will load. Length is split between number of processes.
-        i0 = round((length / nproc) * rank) + offset - pad
-        i1 = round((length / nproc) * (rank + 1)) + offset + pad
+        i0 = round((length / nproc) * rank) + offset - pad[0]
+        i1 = round((length / nproc) * (rank + 1)) + offset + pad[1]
         # Checking that i0 and i1 are still within the bounds of the dataset after padding.
         if i0 < 0:
             i0 = 0
@@ -92,12 +92,12 @@ def read_through_dim3(file, path, preview=":,:,:", pad=0, comm=MPI.COMM_WORLD):
         return data
 
 
-def read_through_dim2(file, path, preview=":,:,:", pad=0, comm=MPI.COMM_WORLD):
+def read_through_dim2(file, path, preview=":,:,:", pad=(0, 0), comm=MPI.COMM_WORLD):
     """Read a dataset in parallel, with each MPI process loading a block, the data being split along dimension 2.
     :param file: Path to file containing the dataset.
     :param path: Path to dataset within the file.
     :param preview: Crop the data with a preview.
-    :param pad: Pad the data by this number of slices. (needs looking at)
+    :param pad: Pad the data by this number of slices.
     :param comm: MPI communicator object.
     """
     rank = comm.rank
@@ -117,8 +117,8 @@ def read_through_dim2(file, path, preview=":,:,:", pad=0, comm=MPI.COMM_WORLD):
             length = (stop - start)//step  # Total length of the section of the dataset being read.
             offset = start  # Offset where the dataset will start being read.
         # Bounds of the data this process will load. Length is split between number of processes.
-        i0 = round((length / nproc) * rank) + offset - pad
-        i1 = round((length / nproc) * (rank + 1)) + offset + pad
+        i0 = round((length / nproc) * rank) + offset - pad[0]
+        i1 = round((length / nproc) * (rank + 1)) + offset + pad[1]
         # Checking that i0 and i1 are still within the bounds of the dataset after padding.
         if i0 < 0:
             i0 = 0
@@ -128,7 +128,7 @@ def read_through_dim2(file, path, preview=":,:,:", pad=0, comm=MPI.COMM_WORLD):
         return data
 
 
-def read_through_dim1(file, path, preview=":,:,:", pad=0, comm=MPI.COMM_WORLD):
+def read_through_dim1(file, path, preview=":,:,:", pad=(0, 0), comm=MPI.COMM_WORLD):
     """Read a dataset in parallel, with each MPI process loading a block, the data being split along dimension 1.
     :param file: Path to file containing the dataset.
     :param path: Path to dataset within the file.
@@ -153,8 +153,8 @@ def read_through_dim1(file, path, preview=":,:,:", pad=0, comm=MPI.COMM_WORLD):
             length = (stop - start)//step  # Total length of the section of the dataset being read.
             offset = start  # Offset where the dataset will start being read.
         # Bounds of the data this process will load. Length is split between number of processes.
-        i0 = round((length / nproc) * rank) + offset - pad
-        i1 = round((length / nproc) * (rank + 1)) + offset + pad
+        i0 = round((length / nproc) * rank) + offset - pad[0]
+        i1 = round((length / nproc) * (rank + 1)) + offset + pad[1]
         # Checking that i0 and i1 are still within the bounds of the dataset after padding.
         if i0 < 0:
             i0 = 0
@@ -162,6 +162,40 @@ def read_through_dim1(file, path, preview=":,:,:", pad=0, comm=MPI.COMM_WORLD):
             i1 = dataset.shape[0]
         data = dataset[i0:i1:step, slice_list[1], slice_list[2]]
         return data
+
+
+def get_pad_values(pad, dim, dim_length, data_indices=None, preview=":,:,:", comm=MPI.COMM_WORLD):
+    rank = comm.rank
+    nproc = comm.size
+    slice_list = get_slice_list_from_preview(preview)
+    if data_indices is not None and dim == 1:
+        bound0 = min(data_indices)
+        bound1 = max(data_indices) + 1
+    else:
+        bound0 = 0
+        bound1 = dim_length
+    if slice_list[0] == slice(None):
+        length = dim_length
+        offset = 0
+        step = 1
+    else:
+        start = 0 if slice_list[0].start is None else slice_list[0].start
+        stop = dim_length if slice_list[0].stop is None else slice_list[0].stop
+        step = 1 if slice_list[0].step is None else slice_list[0].step
+        length = (stop - start) // step  # Total length of the section of the dataset being read.
+        offset = start  # Offset where the dataset will start being read.
+    # Bounds of the data this process will load. Length is split between number of processes.
+    i0 = round((length / nproc) * rank) + offset - pad
+    i1 = round((length / nproc) * (rank + 1)) + offset + pad
+    if i0 < bound0:
+        pad0 = pad - (bound0 - i0)
+    else:
+        pad0 = pad
+    if i1 > bound1:
+        pad1 = pad - (i1 - bound1)
+    else:
+        pad1 = pad
+    return pad0, pad1
 
 
 def read_chunks(file, path, comm):
@@ -290,9 +324,9 @@ def get_slice_list_from_preview(preview):
     :param preview: Preview in the form 'start: stop: step, start: stop: step, start: stop: step'.
     """
     slice_list = [None] * 3
-    preview = preview.split(",")
+    preview = preview.split(",")  # Splitting the dimensions
     for dimension, value in enumerate(preview):
-        values = value.split(":")
+        values = value.split(":")  # Splitting the start, stop, step
         new_values = [None if x.strip() == '' else int(x) for x in values]
         if len(values) == 1:
             slice_list[dimension] = slice(new_values[0])
