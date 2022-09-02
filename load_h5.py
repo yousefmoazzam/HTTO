@@ -1,15 +1,7 @@
 """
-Parallel HDF5 load/read.
+Parallel HDF5 read.
 
-Splits data between processes in different ways.
-Prints and/or collects time taken to read data in each of these ways.
-
-Usage:
-mpirun -np 4 python load_h5.py /path/to/datafile.h5 -p /entry/data -c /path/to/csvfile.csv -r 5 -s p
--p - path to dataset within data file. /entry1/tomo_entry/data/data by default.
--c - add results to a csv file (will create if file doesn't exist).
--r - repeat multiple times.
--s - slicing direction(s) to use. Projections by default
+Methods to load data and surrounding information in parallel.
 
 Author: Jacob Williamson
 
@@ -37,7 +29,8 @@ def __option_parser():
 
 
 def load_data(file, dim, path, preview=":,:,:", pad=(0, 0), comm=MPI.COMM_WORLD):
-    """Load data in parallel, slicing it through a certain dimension.
+    """Load data in parallel, slicing it through a certain dimension. Returns a different block of data for each MPI
+    process.
     :param file: Path to file containing the dataset.
     :param dim: Dimension along which data is sliced when being split between MPI processes.
     :param path: Path to dataset within the file.
@@ -165,6 +158,17 @@ def read_through_dim1(file, path, preview=":,:,:", pad=(0, 0), comm=MPI.COMM_WOR
 
 
 def get_pad_values(pad, dim, dim_length, data_indices=None, preview=":,:,:", comm=MPI.COMM_WORLD):
+    """Get number of slices the block of data is padded either side. Usually this is (pad, pad) but on edge blocks the
+    padding may be less (as there is no data beside the block to pad it with).
+    :param pad: Number of slices to pad block with.
+    :param dim: Dimension data is to be padded in (same dimension data is sliced in).
+    :param dim_length: Size of dataset in the relevant dimension.
+    :param data_indices: When a dataset has non-data in the dataset (for example darks & flats) provide data indices to
+        indicate where in the dataset the data lies. Only has an effect when dim = 1, as darks and flats are in
+        projection space.
+    :param preview: Preview the data will be cropped by. Should be the same preview given to the get_data() method.
+    :param comm: MPI communicator object.
+    """
     rank = comm.rank
     nproc = comm.size
     slice_list = get_slice_list_from_preview(preview)
@@ -184,9 +188,10 @@ def get_pad_values(pad, dim, dim_length, data_indices=None, preview=":,:,:", com
         step = 1 if slice_list[0].step is None else slice_list[0].step
         length = (stop - start) // step  # Total length of the section of the dataset being read.
         offset = start  # Offset where the dataset will start being read.
-    # Bounds of the data this process will load. Length is split between number of processes.
+    # i0, i1 = range of the data this process will load..
     i0 = round((length / nproc) * rank) + offset - pad
     i1 = round((length / nproc) * (rank + 1)) + offset + pad
+    # Checking that after padding, the range is still within the bounds it should be.
     if i0 < bound0:
         pad0 = pad - (bound0 - i0)
     else:
