@@ -9,7 +9,7 @@ from datetime import datetime
 import os
 import math
 
-#import GPUtil
+import GPUtil
 from tomobar.methodsDIR import RecToolsDIR
 
 
