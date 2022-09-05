@@ -3,11 +3,12 @@ from mpi4py import MPI
 import h5py as h5
 import argparse
 import tomopy
-import load_h5
-import chunk_h5
 from datetime import datetime
 import os
 import math
+
+import h5_utils.load_h5 as load_h5
+import h5_utils.chunk_h5 as chunk_h5
 
 import GPUtil
 from tomobar.methodsDIR import RecToolsDIR
@@ -130,6 +131,7 @@ def main():
             reload_time = reload_time1 - reload_time0
             print_once(f"Data reloaded in {reload_time} seconds")
 
+        """
         # trying to denoise the datausing CCPi-regularisation 
         from ccpi.filters.regularisers import PD_TV
         
@@ -155,6 +157,7 @@ def main():
         denoise_time1 = MPI.Wtime()
         denoise_time = denoise_time1 - denoise_time0
         print_once(f"GPU denoising took {denoise_time} seconds")
+        """
 
         # calculating the center of rotation
         center_time0 = MPI.Wtime()

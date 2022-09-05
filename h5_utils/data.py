@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import os
 from datetime import datetime
-import load_h5
+import h5_utils.load_h5 as load_h5
 
 
 class Data:
