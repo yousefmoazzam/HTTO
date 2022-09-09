@@ -4,7 +4,7 @@
 @EXPLICIT
 https://repo.anaconda.com/pkgs/main/linux-64/_libgcc_mutex-0.1-main.conda
 https://repo.anaconda.com/pkgs/main/linux-64/blas-1.0-mkl.conda
-https://repo.anaconda.com/pkgs/main/linux-64/ca-certificates-2022.4.26-h06a4308_0.conda
+https://repo.anaconda.com/pkgs/main/linux-64/ca-certificates-2022.07.19-h06a4308_0.conda
 https://repo.anaconda.com/pkgs/main/linux-64/intel-openmp-2021.4.0-h06a4308_3561.conda
 https://repo.anaconda.com/pkgs/main/linux-64/ld_impl_linux-64-2.38-h1181459_1.conda
 https://repo.anaconda.com/pkgs/main/linux-64/libgfortran4-7.5.0-ha8ba4b0_17.conda
@@ -39,7 +39,7 @@ https://repo.anaconda.com/pkgs/main/linux-64/libxcb-1.15-h7f8727e_0.conda
 https://repo.anaconda.com/pkgs/main/linux-64/libzopfli-1.0.3-he6710b0_0.conda
 https://repo.anaconda.com/pkgs/main/linux-64/lz4-c-1.9.3-h295c915_1.conda
 https://repo.anaconda.com/pkgs/main/linux-64/ncurses-6.3-h7f8727e_2.conda
-https://repo.anaconda.com/pkgs/main/linux-64/openssl-1.1.1o-h7f8727e_0.conda
+https://repo.anaconda.com/pkgs/main/linux-64/openssl-1.1.1q-h7f8727e_0.conda
 https://repo.anaconda.com/pkgs/main/linux-64/patchelf-0.13-h295c915_0.conda
 https://repo.anaconda.com/pkgs/main/linux-64/pcre-8.45-h295c915_0.conda
 https://repo.anaconda.com/pkgs/main/linux-64/snappy-1.1.9-h295c915_0.conda
@@ -77,7 +77,7 @@ https://repo.anaconda.com/pkgs/main/linux-64/openjpeg-2.4.0-h3ad879b_0.conda
 https://repo.anaconda.com/pkgs/main/linux-64/python-3.7.13-h12debd9_0.conda
 https://repo.anaconda.com/pkgs/main/noarch/attrs-21.4.0-pyhd3eb1b0_0.conda
 https://repo.anaconda.com/pkgs/main/noarch/backcall-0.2.0-pyhd3eb1b0_0.tar.bz2
-https://repo.anaconda.com/pkgs/main/linux-64/certifi-2022.5.18.1-py37h06a4308_0.conda
+https://conda.anaconda.org/conda-forge/noarch/certifi-2022.6.15-pyhd8ed1ab_1.tar.bz2
 https://repo.anaconda.com/pkgs/main/linux-64/cfitsio-3.470-hf0d0db6_6.conda
 https://repo.anaconda.com/pkgs/main/linux-64/chardet-4.0.0-py37h06a4308_1003.conda
 https://repo.anaconda.com/pkgs/main/noarch/charset-normalizer-2.0.4-pyhd3eb1b0_0.conda
@@ -139,6 +139,7 @@ https://repo.anaconda.com/pkgs/main/linux-64/cffi-1.15.0-py37hd667e15_1.conda
 https://repo.anaconda.com/pkgs/main/linux-64/conda-package-handling-1.8.1-py37h7f8727e_0.conda
 https://conda.anaconda.org/conda-forge/linux-64/cython-0.29.30-py37hd23a5d3_0.tar.bz2
 https://repo.anaconda.com/pkgs/main/linux-64/cytoolz-0.11.0-py37h7b6447c_0.conda
+https://conda.anaconda.org/conda-forge/linux-64/fastrlock-0.8-py37hd23a5d3_2.tar.bz2
 https://repo.anaconda.com/pkgs/main/noarch/fonttools-4.25.0-pyhd3eb1b0_0.conda
 https://repo.anaconda.com/pkgs/main/linux-64/importlib-metadata-4.11.3-py37h06a4308_0.conda
 https://repo.anaconda.com/pkgs/main/noarch/importlib_resources-5.2.0-pyhd3eb1b0_1.conda
@@ -178,6 +179,7 @@ https://repo.anaconda.com/pkgs/main/linux-64/anaconda-client-1.9.0-py37h06a4308_
 https://repo.anaconda.com/pkgs/main/linux-64/conda-4.12.0-py37h06a4308_0.conda
 https://conda.anaconda.org/conda-forge/noarch/pytest-xdist-2.5.0-pyhd8ed1ab_0.tar.bz2
 https://repo.anaconda.com/pkgs/main/linux-64/conda-build-3.21.8-py37h06a4308_2.conda
+https://conda.anaconda.org/conda-forge/linux-64/cupy-11.1.0-py37ha5d5e86_0.tar.bz2
 https://conda.anaconda.org/conda-forge/linux-64/h5py-2.10.0-mpi_openmpi_py37h8f0990d_2.tar.bz2
 https://conda.anaconda.org/conda-forge/linux-64/hdf5plugin-2.3.0-py37hc8db923_0.tar.bz2
 https://conda.anaconda.org/conda-forge/linux-64/pyfftw-0.12.0-py37hec8f33a_2.tar.bz2
@@ -192,7 +194,7 @@ https://repo.anaconda.com/pkgs/main/linux-64/mkl_random-1.2.2-py37h51133e4_0.con
 https://repo.anaconda.com/pkgs/main/linux-64/numpy-1.21.5-py37h6c91a56_3.conda
 https://conda.anaconda.org/savu-dep/linux-64/ccpi-regulariser-2022.06-np121py37_0.tar.bz2
 https://repo.anaconda.com/pkgs/main/noarch/imageio-2.9.0-pyhd3eb1b0_0.conda
-https://conda.anaconda.org/savu-dep/linux-64/larix-2022.05-py37hadde398_0.tar.bz2
+https://conda.anaconda.org/savu-dep/linux-64/larix-2022.09-py37hadde398_0.tar.bz2
 https://repo.anaconda.com/pkgs/main/linux-64/numexpr-2.8.1-py37h6abb31d_0.conda
 https://conda.anaconda.org/savu-dep/linux-64/pmacparser-4.0-py37hdeaff10_0.tar.bz2
 https://conda.anaconda.org/savu-dep/linux-64/pypwt-0.9_10.2-py37hadde398_0.tar.bz2
