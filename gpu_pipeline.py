@@ -1,3 +1,6 @@
+"""
+The reconstruction pipeline using CuPy and other GPU software on the GPU
+"""
 import numpy as np
 from mpi4py import MPI
 import h5py as h5
@@ -6,12 +9,14 @@ import tomopy
 from datetime import datetime
 import os
 import math
+import sys
 
 import h5_utils.load_h5 as load_h5
 import h5_utils.chunk_h5 as chunk_h5
 
-import GPUtil
+import cupy as cp
 from tomobar.methodsDIR import RecToolsDIR
+from larix.methods.misc_gpu import MEDIAN_FILT_GPU
 
 
 def __option_parser():
@@ -26,10 +31,10 @@ def __option_parser():
     parser.add_argument("-cr", "--crop", type=int, choices=range(1, 101), default=100,
                         help="Percentage of data to process. 10 will take the middle 10% of data in the second dimension.")
     parser.add_argument("-rec", "--reconstruction", default="tomopy",
-                        help="The reconstruction toolbox to use for FBP CUDA: tomopy or tomobar.")
-    parser.add_argument("-rings", "--stripe", default=None, help="The stripes removal method to apply.")
-    parser.add_argument("-nc", "--ncore", type=int, default=1, help="The number of cores.")
+                        help="The reconstruction toolbox to use for FBP CUDA: tomopy or tomobar.")    
+    parser.add_argument("-nc", "--ncore", type=int, default=0, help="The number of cores.")
     parser.add_argument("-pad", "--pad", type=int, default=0, help="Number of slices to pad each block of data.")
+    parser.add_argument("-m", "--methods", type=int, default=1, help="A method component to add: 1 - median filter, 2 - (1) + normalisation, 3 - (2) + stripes removal, 4 - (3) + centering, 5 - (4) + reconstruction")
     args = parser.parse_args()
     return args
 
@@ -39,6 +44,9 @@ def main():
     comm = MPI.COMM_WORLD
     comm_size = comm.Get_size()
     rank = comm.Get_rank()
+    if args.ncore == 0:
+        #set ncore value to be the maximum of all CPU cores detected
+        args.ncore = os.cpu_count()    
     for i in range(args.repeat):
         print(f"Run number: {i}")
         total_time0 = MPI.Wtime()
@@ -46,6 +54,8 @@ def main():
             dataset = in_file[args.path]
             shape = dataset.shape
         print_once(f"Dataset shape is {shape}")
+        ##########################################################################################################
+        #                                       Loading the data
         angles_degrees = load_h5.get_angles(args.in_file, comm=comm)
         data_indices = load_h5.get_data_indices(args.in_file,
                                                 image_key_path="/entry1/tomo_entry/instrument/detector/image_key",
@@ -80,33 +90,80 @@ def main():
                                                comm=comm, preview=preview, dim=args.dimension)
 
         (angles_total, detector_y, detector_x) = np.shape(data)
-        print(f"Process {rank}'s data shape is {(angles_total, detector_y, detector_x)}")
-
+        print(f"Process {rank}'s data shape is {(angles_total, detector_y, detector_x)} of type {data.dtype}")
+        ##########################################################################################################        
+        #                              3D Median filter to apply to raw data/flats/darks        
+        median_time0 = MPI.Wtime()
+        kernel_size = 3 # full size kernel 3 x 3 x 3
+        data = MEDIAN_FILT_GPU(data, kernel_size)
+        flats = MEDIAN_FILT_GPU(np.asarray(flats), kernel_size)
+        darks = MEDIAN_FILT_GPU(np.asarray(darks), kernel_size)
+        median_time1 = MPI.Wtime()
+        median_time = median_time1 - median_time0
+        print_once(f"Median filtering took {median_time} seconds")
+        if args.methods == 1:
+            # you might want to write the resulting volume here for testing/comparison with CPU?
+            sys.exit()                
+        ##########################################################################################################
+        #                           Normalising the data and taking the negative log
         norm_time0 = MPI.Wtime()
-        data = tomopy.normalize(data, flats, darks, ncore=args.ncore, cutoff=10)
+        data_gpu = cp.asarray(data)        
+        dark0 = cp.mean(cp.asarray(darks), axis=0) 
+        flat0 = cp.mean(cp.asarray(flats), axis=0)        
+        data_gpu = (data_gpu-dark0)/(flat0-dark0+1e-3)
+        data_gpu[data_gpu<=0] = 1
+        data_gpu = -cp.log(data_gpu)
+        data_gpu[cp.isnan(data_gpu)] = 6.0
+        data_gpu[cp.isinf(data_gpu)] = 0    
         norm_time1 = MPI.Wtime()
         norm_time = norm_time1 - norm_time0
-        print_once(f"Data normalised in {norm_time} seconds")
-
-        min_log_time0 = MPI.Wtime()
-        data[data == 0.0] = 1e-09
-        data = tomopy.minus_log(data, ncore=args.ncore)
-        # data[data > 0.0] = -np.log(data[data > 0.0])
-        min_log_time1 = MPI.Wtime()
-        min_log_time = min_log_time1 - min_log_time0
-        print_once(f"Minus log process executed in {min_log_time} seconds")
-
+        print_once(f"Normalising the data and negative log took {norm_time} seconds")        
+        if args.methods == 2:
+            # you might want to write the resulting volume here for testing/comparison with CPU?
+            sys.exit()             
+        ##########################################################################################################        
+        #                                        Removing stripes             
+        stripes_time0 = MPI.Wtime()
+        #data = tomopy.prep.stripe.remove_stripe_ti(data, nblock=0, alpha=1.5, ncore=args.ncore)
+        #  Remove stripes with a new method by V. Titarenko  (TomoCuPy)
+        beta = 0.1 # lowering the value increases the filter strength 
+        gamma = beta*((1-beta)/(1+beta))**cp.abs(cp.fft.fftfreq(data_gpu.shape[-1])*data_gpu.shape[-1])
+        gamma[0] -= 1        
+        v = cp.mean(data_gpu,axis=0)
+        v = v-v[:,0:1]
+        v = cp.fft.irfft(cp.fft.rfft(v)*cp.fft.rfft(gamma))                
+        data_gpu[:] += v
+        data = data_gpu.get()
+        stripes_time1 = MPI.Wtime()
+        stripes_time = stripes_time1 - stripes_time0
+        print_once(f"Data unstriped in {stripes_time} seconds")
+        if args.methods == 3:
+            # you might want to write the resulting volume here for testing/comparison with CPU?
+            sys.exit()  
+        ##########################################################################################################
+        #                                Calculating the center of rotation (CPU so far)
+        center_time0 = MPI.Wtime()
+        rot_center = 0
+        mid_rank = int(round(comm_size / 2) + 0.1)
+        if rank == mid_rank:
+            mid_slice = int(np.size(data, 1) / 2)
+            rot_center = tomopy.find_center_vo(data[:, mid_slice, :], step=0.5, ncore=args.ncore)
+        rot_center = comm.bcast(rot_center, root=mid_rank)
+        center_time1 = MPI.Wtime()
+        center_time = center_time1 - center_time0
+        print_once(f"COR {rot_center} found in {center_time} seconds")
+        if args.methods == 4:
+            # you might want to write the resulting volume here for testing/comparison with GPU?
+            sys.exit()
+        ##########################################################################################################
+        #                              Saving/reloading the intermediate dataset      
         abs_out_folder = os.path.abspath(args.out_folder)
         out_folder = f"{abs_out_folder}/{datetime.now().strftime('%d-%m-%Y_%H_%M_%S')}_recon"
         if rank == 0:
             print("Making directory")
             os.mkdir(out_folder)
             print("Directory made")
-
-        nNodes = 1  # change this when nNodes > 1
-        GPUs_list = GPUtil.getAvailable(order='memory', limit=4)  # will return a list of availble GPUs
-        GPU_index_wr_to_rank = __calculate_GPU_index(nNodes, rank, GPUs_list)
-
+            
         # calculate the chunk size for the projection data
         slices_no_in_chunks = 4
         if (args.dimension == 1):
@@ -130,68 +187,18 @@ def main():
             reload_time1 = MPI.Wtime()
             reload_time = reload_time1 - reload_time0
             print_once(f"Data reloaded in {reload_time} seconds")
-
-        """
-        # trying to denoise the datausing CCPi-regularisation 
-        from ccpi.filters.regularisers import PD_TV
+        ##########################################################################################################
+        #              Reconstruction with either Tomopy-ASTRA (2D) or ToMoBAR-ASTRA (3D)
+        nNodes = 1  # change this when nNodes > 1        
+        GPU_devicesNo = cp.cuda.runtime.getDeviceCount()
+        GPU_index_wr_to_rank = __calculate_GPU_index(nNodes, rank, GPU_devicesNo)
         
-        # set parameters
-        pars = {'algorithm' : PD_TV, \
-                'input' : data,\
-                'regularisation_parameter': 0.0000001, \
-                'number_of_iterations' : 500 ,\
-                'tolerance_constant':1e-06,\
-                'methodTV': 0 ,\
-                'nonneg': 0,
-                'lipschitz_const' : 8}
-        
-        denoise_time0 = MPI.Wtime()
-        (data, info_vec_gpu)  = PD_TV(pars['input'], 
-              pars['regularisation_parameter'],
-              pars['number_of_iterations'],
-              pars['tolerance_constant'], 
-              pars['methodTV'],
-              pars['nonneg'],
-              pars['lipschitz_const'],
-              GPU_index_wr_to_rank)        
-        denoise_time1 = MPI.Wtime()
-        denoise_time = denoise_time1 - denoise_time0
-        print_once(f"GPU denoising took {denoise_time} seconds")
-        """
-
-        # calculating the center of rotation
-        center_time0 = MPI.Wtime()
-        rot_center = 0
-        mid_rank = int(round(comm_size / 2) + 0.1)
-        if rank == mid_rank:
-            mid_slice = int(np.size(data, 1) / 2)
-            # print(f"Slice for calculation CoR {mid_slice}")
-            rot_center = tomopy.find_center_vo(data[:, mid_slice, :], step=0.5, ncore=args.ncore)
-            # print(f"The calculated CoR is {rot_center}")
-        rot_center = comm.bcast(rot_center, root=mid_rank)
-        center_time1 = MPI.Wtime()
-        center_time = center_time1 - center_time0
-        print_once(f"COR found in {center_time} seconds")
-
-        if args.stripe is not None:
-            # removing stripes
-            stripes_time0 = MPI.Wtime()
-            if args.stripe == 'remove_stripe_fw':
-                data = tomopy.prep.stripe.remove_stripe_fw(data, wname='db5', sigma=5, ncore=args.ncore)
-            if args.stripe == 'remove_all_stripe':
-                data = tomopy.prep.stripe.remove_all_stripe(data, ncore=args.ncore)
-            if args.stripe == 'remove_stripe_based_sorting':
-                data = tomopy.prep.stripe.remove_stripe_based_sorting(data, ncore=args.ncore)
-            stripes_time1 = MPI.Wtime()
-            stripes_time = stripes_time1 - stripes_time0
-            print_once(f"Data unstriped in {stripes_time} seconds")
-            
         recon_time0 = MPI.Wtime()
         print_once(f"Using CoR {rot_center}")
-        print_once(f"Number of GPUs = {len(GPUs_list)}")       
+        print_once(f"Number of GPUs = {GPU_devicesNo}")       
         
-        if GPUs_list is not None:
-            data = concat_for_gpu(data, 2, len(GPUs_list), comm)                      
+        if GPU_devicesNo is not None or GPU_devicesNo > 0:
+            data = concat_for_gpu(data, 2, GPU_devicesNo, comm)                      
             if data is not None:
                 if args.reconstruction == 'tomopy':
                     # use Tomopy-ASTRA toolbox for reconstruction on a GPU
@@ -207,8 +214,7 @@ def main():
                                          options=opts,
                                          ncore=args.ncore)
                 else:
-                    # using ToMoBAR software (aslo wraps ASTRA similarly to tomopy)
-                    print(data.shape)
+                    # using ToMoBAR software (wraps ASTRA but uses 3D BP and CuPy for filtering)
                     RectoolsDIR = RecToolsDIR(
                         DetectorsDimH=detector_x,  # Horizontal detector dimension
                         DetectorsDimV=np.size(data, 1),  # Vertical detector dimension (3D case)
@@ -216,20 +222,19 @@ def main():
                         AnglesVec=angles_radians,  # A vector of projection angles in radians
                         ObjSize=detector_x,  # Reconstructed object dimensions (scalar)
                         device_projector=GPU_index_wr_to_rank)
-                    recon = RectoolsDIR.FBP(np.swapaxes(data, 0, 1))  # perform FBP as 3D BP with Astra and then filtering
-                    #print(recon.shape)
-                    #dim = 1  # As data has axes swapped
+                    recon = RectoolsDIR.FBP3D_cupy(np.swapaxes(data, 0, 1))  # perform FBP as 3D BP with Astra and then filtering
             else:
                 print(f"Rank {rank}: Waiting for GPU processes.")
                 recon = data
-            recon = scatter_after_gpu(recon, 2, len(GPUs_list), comm)
+            recon = scatter_after_gpu(recon, 2, GPU_devicesNo, comm)
             #print(recon.shape)
         else:
             raise Exception("There are no GPUs available for reconstruction")
         recon_time1 = MPI.Wtime()
         recon_time = recon_time1 - recon_time0
         print_once(f"Data reconstructed in {recon_time} seconds")
-
+        ##########################################################################################################
+        #                          Saving the result of the reconstruction
         (vert_slices, recon_x, recon_y) = np.shape(recon)
         chunks_recon = (1, recon_x, recon_y)
 
@@ -238,10 +243,11 @@ def main():
         save_recon_time1 = MPI.Wtime()
         save_recon_time = save_recon_time1 - save_recon_time0
         print_once(f"Reconstruction saved in {save_recon_time} seconds")
-
+        ##########################################################################################################
+        
         total_time1 = MPI.Wtime()
         total_time = total_time1 - total_time0
-        print_once(f"Total time = {total_time} seconds.")
+        print_once(f"Total time = {total_time} seconds.")       
 
 
 def print_once(output):
@@ -249,9 +255,8 @@ def print_once(output):
         print(output)
 
 
-def __calculate_GPU_index(nNodes, rank, GPUs_list):
-    nGPUs = len(GPUs_list)
-    return int(rank / nNodes) % nGPUs
+def __calculate_GPU_index(nNodes, rank, GPU_devicesNo):
+    return int(rank / nNodes) % GPU_devicesNo
 
 
 def concat_for_gpu(data, dim, nGPUs, comm=MPI.COMM_WORLD):
