@@ -1,4 +1,4 @@
-FROM registry.hub.docker.com/nvidia/cuda:11.7.1-runtime-ubuntu20.04
+FROM registry.hub.docker.com/nvidia/cuda:11.7.1-devel-ubuntu20.04
 
 ENV HTTO_DIR=/htto
 WORKDIR ${HTTO_DIR}
