@@ -9,9 +9,8 @@ ENV PATH=${PYTHON_PATH}/bin:${PATH}:${PIPX_BIN_DIR}
 COPY library-scripts/*.sh /tmp/library-scripts/
 
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive  \
-    && apt-get -y install --no-install-recommends curl ca-certificates \
     && /bin/bash /tmp/library-scripts/common-debian.sh \
-    && /bin/bash /tmp/library-scripts/python-debian.sh "${PYTHON_VERSION}" "${PYTHON_PATH}" "${PIPX_HOME}" "${USER_UID}" "true" "true" "true" "true" \
-    && apt-get clean -y && rm -rf /var/lib/apt/lists/* \
+    && apt-get install -y openmpi-bin libopenmpi-dev \
+    && /bin/bash /tmp/library-scripts/python-debian.sh "${PYTHON_VERSION}" "${PYTHON_PATH}" "${PIPX_HOME}" "automatic" "true" "true" "true" "true" \
+    && apt-get autoremove -y && apt-get clean -y && rm -rf /var/lib/apt/lists/* \
     && rm -rf /tmp/library-scripts
-    
