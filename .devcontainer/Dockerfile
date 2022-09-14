@@ -11,6 +11,6 @@ COPY library-scripts/*.sh /tmp/library-scripts/
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive  \
     && /bin/bash /tmp/library-scripts/common-debian.sh \
     && apt-get install -y openmpi-bin libopenmpi-dev \
-    && /bin/bash /tmp/library-scripts/python-debian.sh "${PYTHON_VERSION}" "${PYTHON_PATH}" "${PIPX_HOME}" "automatic" "true" "true" "true" "true" \
+    && /bin/bash /tmp/library-scripts/python-debian.sh "${PYTHON_VERSION}" "${PYTHON_PATH}" "${PIPX_HOME}" "automatic" "true" "false" "true" "true" \
     && apt-get autoremove -y && apt-get clean -y && rm -rf /var/lib/apt/lists/* \
     && rm -rf /tmp/library-scripts

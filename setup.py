@@ -1,19 +1,13 @@
-# -*- encoding: utf-8 -*-
+import glob
+import importlib.util
 
-from setuptools import setup, find_packages
+from setuptools import setup
 
-setup(
-    name="htto",
-    version=0.1,
-    description="High Throughput Tomography framework",
-    author="Jacob Williamson and Daniil Kazantsev",
-    author_email="scientificsoftware@diamond.ac.uk",
-    url="https://github.com/dkazanc/HTTO",
-    license="BSD 3-clause",  
-    packages = find_packages(),
-    requires=['numpy'],
-    long_description="""
-    A tool for reading tomographic data in parallel using MPI protocols, analyse and 
-    reconstruct it using already available packages like TomoPy and ASTRA. 
-    """,
-)
+# Import <package>._version_git.py without importing <package>
+path = glob.glob(__file__.replace("setup.py", "src/*/_version_git.py"))[0]
+spec = importlib.util.spec_from_file_location("_version_git", path)
+assert spec and spec.loader
+vg = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(vg)
+
+setup(cmdclass=vg.get_cmdclass(), version=vg.__version__)
