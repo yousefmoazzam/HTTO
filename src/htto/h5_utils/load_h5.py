@@ -19,11 +19,22 @@ from datetime import datetime
 def __option_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("in_file", help="Input data file.")
-    parser.add_argument("-p", "--path", default="/entry1/tomo_entry/data/data", help="Data path.")
-    parser.add_argument("-c", "--csv", default=None, help="Write results to specified csv file.")
-    parser.add_argument("-r", "--repeat", type=int, default=1, help="Number of repeats.")
-    parser.add_argument("-s", "--slicing", type=list, default=["p"],
-                        help="Which slicing options to use (c, p, s, t).")
+    parser.add_argument(
+        "-p", "--path", default="/entry1/tomo_entry/data/data", help="Data path."
+    )
+    parser.add_argument(
+        "-c", "--csv", default=None, help="Write results to specified csv file."
+    )
+    parser.add_argument(
+        "-r", "--repeat", type=int, default=1, help="Number of repeats."
+    )
+    parser.add_argument(
+        "-s",
+        "--slicing",
+        type=list,
+        default=["p"],
+        help="Which slicing options to use (c, p, s, t).",
+    )
     args = parser.parse_args()
     return args
 
@@ -69,9 +80,13 @@ def read_through_dim3(file, path, preview=":,:,:", pad=(0, 0), comm=MPI.COMM_WOR
             step = 1
         else:
             start = 0 if slice_list[2].start is None else slice_list[1].start
-            stop = dataset.shape[2] if slice_list[2].stop is None else slice_list[2].stop
+            stop = (
+                dataset.shape[2] if slice_list[2].stop is None else slice_list[2].stop
+            )
             step = 1 if slice_list[2].step is None else slice_list[2].step
-            length = (stop - start) // step  # Total length of the section of the dataset being read.
+            length = (
+                stop - start
+            ) // step  # Total length of the section of the dataset being read.
             offset = start  # Offset where the dataset will start being read.
         # Bounds of the data this process will load. Length is split between number of processes.
         i0 = round((length / nproc) * rank) + offset - pad[0]
@@ -105,9 +120,13 @@ def read_through_dim2(file, path, preview=":,:,:", pad=(0, 0), comm=MPI.COMM_WOR
             step = 1
         else:
             start = 0 if slice_list[1].start is None else slice_list[1].start
-            stop = dataset.shape[1] if slice_list[1].stop is None else slice_list[1].stop
+            stop = (
+                dataset.shape[1] if slice_list[1].stop is None else slice_list[1].stop
+            )
             step = 1 if slice_list[1].step is None else slice_list[1].step
-            length = (stop - start)//step  # Total length of the section of the dataset being read.
+            length = (
+                stop - start
+            ) // step  # Total length of the section of the dataset being read.
             offset = start  # Offset where the dataset will start being read.
         # Bounds of the data this process will load. Length is split between number of processes.
         i0 = round((length / nproc) * rank) + offset - pad[0]
@@ -141,9 +160,13 @@ def read_through_dim1(file, path, preview=":,:,:", pad=(0, 0), comm=MPI.COMM_WOR
             step = 1
         else:
             start = 0 if slice_list[0].start is None else slice_list[0].start
-            stop = dataset.shape[0] if slice_list[0].stop is None else slice_list[0].stop
+            stop = (
+                dataset.shape[0] if slice_list[0].stop is None else slice_list[0].stop
+            )
             step = 1 if slice_list[0].step is None else slice_list[0].step
-            length = (stop - start)//step  # Total length of the section of the dataset being read.
+            length = (
+                stop - start
+            ) // step  # Total length of the section of the dataset being read.
             offset = start  # Offset where the dataset will start being read.
         # Bounds of the data this process will load. Length is split between number of processes.
         i0 = round((length / nproc) * rank) + offset - pad[0]
@@ -157,7 +180,9 @@ def read_through_dim1(file, path, preview=":,:,:", pad=(0, 0), comm=MPI.COMM_WOR
         return data
 
 
-def get_pad_values(pad, dim, dim_length, data_indices=None, preview=":,:,:", comm=MPI.COMM_WORLD):
+def get_pad_values(
+    pad, dim, dim_length, data_indices=None, preview=":,:,:", comm=MPI.COMM_WORLD
+):
     """Get number of slices the block of data is padded either side. Usually this is (pad, pad) but on edge blocks the
     padding may be less (as there is no data beside the block to pad it with).
     :param pad: Number of slices to pad block with.
@@ -186,7 +211,9 @@ def get_pad_values(pad, dim, dim_length, data_indices=None, preview=":,:,:", com
         start = 0 if slice_list[0].start is None else slice_list[0].start
         stop = dim_length if slice_list[0].stop is None else slice_list[0].stop
         step = 1 if slice_list[0].step is None else slice_list[0].step
-        length = (stop - start) // step  # Total length of the section of the dataset being read.
+        length = (
+            stop - start
+        ) // step  # Total length of the section of the dataset being read.
         offset = start  # Offset where the dataset will start being read.
     # i0, i1 = range of the data this process will load..
     i0 = round((length / nproc) * rank) + offset - pad
@@ -211,7 +238,9 @@ def read_chunks(file, path, comm):
         shape = dataset.shape
         chunks = dataset.chunks
 
-    chunk_boundaries = [[None] * (math.ceil(shape[i] / chunks[i]) + 1) for i in range(len(shape))]
+    chunk_boundaries = [
+        [None] * (math.ceil(shape[i] / chunks[i]) + 1) for i in range(len(shape))
+    ]
 
     # Creating a list of chunk boundaries in each dimension.
     for dim in range(len(shape)):
@@ -225,7 +254,7 @@ def read_chunks(file, path, comm):
     # Calculating number of chunks
     nchunks = 1
     for dim in range(len(chunk_boundaries)):
-        nchunks *= (len(chunk_boundaries[dim]) - 1)
+        nchunks *= len(chunk_boundaries[dim]) - 1
     chunk_slice_lists = [None for i in range(nchunks)]
 
     # Create a slice list for each chunk from the chunk boundaries.
@@ -233,9 +262,11 @@ def read_chunks(file, path, comm):
     for i in range(1, len(chunk_boundaries[0])):
         for j in range(1, len(chunk_boundaries[1])):
             for k in range(1, len(chunk_boundaries[2])):
-                chunk_slice_lists[count] = [slice(chunk_boundaries[0][i - 1], chunk_boundaries[0][i]),
-                                            slice(chunk_boundaries[1][j - 1], chunk_boundaries[1][j]),
-                                            slice(chunk_boundaries[2][k - 1], chunk_boundaries[2][k])]
+                chunk_slice_lists[count] = [
+                    slice(chunk_boundaries[0][i - 1], chunk_boundaries[0][i]),
+                    slice(chunk_boundaries[1][j - 1], chunk_boundaries[1][j]),
+                    slice(chunk_boundaries[2][k - 1], chunk_boundaries[2][k]),
+                ]
                 count += 1
 
     # Splitting chunks between each process.
@@ -246,14 +277,18 @@ def read_chunks(file, path, comm):
     with h5.File(file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
         dataset = in_file[path]
         for chunk_no in range(i0, i1):
-            proc_data = dataset[chunk_slice_lists[chunk_no][0],  # slices 0th dimension
-                                chunk_slice_lists[chunk_no][1],  # slices 1st dimension
-                                chunk_slice_lists[chunk_no][2]]  # slices 2nd dimension
+            proc_data = dataset[
+                chunk_slice_lists[chunk_no][0],  # slices 0th dimension
+                chunk_slice_lists[chunk_no][1],  # slices 1st dimension
+                chunk_slice_lists[chunk_no][2],
+            ]  # slices 2nd dimension
             # to produce a 3d chunk
     return nchunks
 
 
-def get_angles(file, path="/entry1/tomo_entry/data/rotation_angle", comm=MPI.COMM_WORLD):
+def get_angles(
+    file, path="/entry1/tomo_entry/data/rotation_angle", comm=MPI.COMM_WORLD
+):
     """Get angles.
     :param file: Path to file containing the data and angles.
     :param path: Path to the angles within the file.
@@ -264,9 +299,15 @@ def get_angles(file, path="/entry1/tomo_entry/data/rotation_angle", comm=MPI.COM
     return angles
 
 
-def get_darks_flats(file, data_path="/entry1/tomo_entry/data/data",
-                    image_key_path="/entry1/instrument/image_key/image_key", dim=1, pad=0, preview=":,:,:",
-                    comm=MPI.COMM_WORLD):
+def get_darks_flats(
+    file,
+    data_path="/entry1/tomo_entry/data/data",
+    image_key_path="/entry1/instrument/image_key/image_key",
+    dim=1,
+    pad=0,
+    preview=":,:,:",
+    comm=MPI.COMM_WORLD,
+):
     """Get darks and flats.
     :param file: Path to file containing the dataset.
     :param data_path: Path to the dataset within the file.
@@ -296,7 +337,11 @@ def get_darks_flats(file, data_path="/entry1/tomo_entry/data/data",
                 step = 1
             else:
                 start = 0 if slice_list[1].start is None else slice_list[1].start
-                stop = dataset.shape[1] if slice_list[1].stop is None else slice_list[1].stop
+                stop = (
+                    dataset.shape[1]
+                    if slice_list[1].stop is None
+                    else slice_list[1].stop
+                )
                 step = 1 if slice_list[1].step is None else slice_list[1].step
                 length = (stop - start) // step
                 offset = start
@@ -305,12 +350,18 @@ def get_darks_flats(file, data_path="/entry1/tomo_entry/data/data",
             darks = [dataset[x][i0:i1:step][slice_list[2]] for x in darks_indices]
             flats = [dataset[x][i0:i1:step][slice_list[2]] for x in flats_indices]
         else:
-            darks = [file[data_path][x][slice_list[1]][slice_list[2]] for x in darks_indices]
-            flats = [file[data_path][x][slice_list[1]][slice_list[2]] for x in flats_indices]
+            darks = [
+                file[data_path][x][slice_list[1]][slice_list[2]] for x in darks_indices
+            ]
+            flats = [
+                file[data_path][x][slice_list[1]][slice_list[2]] for x in flats_indices
+            ]
         return darks, flats
 
 
-def get_data_indices(file, image_key_path="/entry1/instrument/image_key/image_key", comm=MPI.COMM_WORLD):
+def get_data_indices(
+    file, image_key_path="/entry1/instrument/image_key/image_key", comm=MPI.COMM_WORLD
+):
     """Get the indices of where the data is in a dataset.
     :param file: Path to the file containing the dataset and image key.
     :param image_key_path: Path to the image key within the file.
@@ -332,7 +383,7 @@ def get_slice_list_from_preview(preview):
     preview = preview.split(",")  # Splitting the dimensions
     for dimension, value in enumerate(preview):
         values = value.split(":")  # Splitting the start, stop, step
-        new_values = [None if x.strip() == '' else int(x) for x in values]
+        new_values = [None if x.strip() == "" else int(x) for x in values]
         if len(values) == 1:
             slice_list[dimension] = slice(new_values[0])
         elif len(values) == 2:
@@ -367,17 +418,19 @@ def main():
         print(f"Compression = {compression}")
         print()
 
-    times_dict = {"file name": [None] * args.repeat,
-                  "data path": [None] * args.repeat,
-                  "nproc": [None] * args.repeat,
-                  "size": [None] * args.repeat,
-                  "shape": [None] * args.repeat,
-                  "chunks": [None] * args.repeat,
-                  "chunks time (s)": [None] * args.repeat,
-                  "projections time (s)": [None] * args.repeat,
-                  "sinograms time (s)": [None] * args.repeat,
-                  "tangentograms time (s)": [None] * args.repeat,
-                  "date/time": [None] * args.repeat}
+    times_dict = {
+        "file name": [None] * args.repeat,
+        "data path": [None] * args.repeat,
+        "nproc": [None] * args.repeat,
+        "size": [None] * args.repeat,
+        "shape": [None] * args.repeat,
+        "chunks": [None] * args.repeat,
+        "chunks time (s)": [None] * args.repeat,
+        "projections time (s)": [None] * args.repeat,
+        "sinograms time (s)": [None] * args.repeat,
+        "tangentograms time (s)": [None] * args.repeat,
+        "date/time": [None] * args.repeat,
+    }
 
     for repeat in range(args.repeat):
 
@@ -455,5 +508,5 @@ def main():
             print()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

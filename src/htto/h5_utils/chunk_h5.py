@@ -11,11 +11,14 @@ import h5py as h5
 import argparse
 import os.path
 
+
 def __option_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("in_file", help="Input data file.")
     parser.add_argument("out_folder", help="Output folder.")
-    parser.add_argument("-p", "--path", help="Data path", default="/entry1/tomo_entry/data/data")
+    parser.add_argument(
+        "-p", "--path", help="Data path", default="/entry1/tomo_entry/data/data"
+    )
     args = parser.parse_args()
     return args
 
@@ -36,13 +39,23 @@ def save_file_chunked(in_file, out_folder, chunks, path="/entry1/tomo_entry/data
             temp = ".".join(temp)
         new_filename = temp
         new_file = h5.File(new_filename, "a")
-        new_dataset = new_file.create_dataset(path, shape=shape, dtype=dtype, chunks=chunks, compression="gzip")
+        new_dataset = new_file.create_dataset(
+            path, shape=shape, dtype=dtype, chunks=chunks, compression="gzip"
+        )
         new_dataset[...] = dataset[...]
 
     new_file.close()
 
 
-def save_dataset(out_folder, file_name, data, slice_dim=1, chunks=(150, 150, 10), path="/data", comm=MPI.COMM_WORLD):
+def save_dataset(
+    out_folder,
+    file_name,
+    data,
+    slice_dim=1,
+    chunks=(150, 150, 10),
+    path="/data",
+    comm=MPI.COMM_WORLD,
+):
     """Save dataset in parallel.
     :param out_folder: Path to output folder.
     :param file_name: Name of file to save dataset in.
@@ -60,7 +73,12 @@ def save_dataset(out_folder, file_name, data, slice_dim=1, chunks=(150, 150, 10)
         save_data_parallel(dataset, data, slice_dim)
 
 
-def save_data_parallel(dataset, data, slice_dim, comm=MPI.COMM_WORLD,):
+def save_data_parallel(
+    dataset,
+    data,
+    slice_dim,
+    comm=MPI.COMM_WORLD,
+):
     """Save data to dataset in parallel.
     :param dataset: Dataset to save data to.
     :param data: Data to save to dataset.
@@ -88,4 +106,3 @@ def get_data_shape(data, dim, comm=MPI.COMM_WORLD):
     shape[dim] = sum(lengths)
     shape = tuple(shape)
     return shape
-

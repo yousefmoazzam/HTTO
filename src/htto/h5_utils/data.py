@@ -10,12 +10,13 @@ import h5_utils.load_h5 as load_h5
 
 
 class Data:
-
-    def __init__(self,
-                 file,
-                 path="/entry1/tomo_entry/data/data",
-                 image_key_path="/entry1/tomo_entry/instrument/detector/image_key",
-                 comm=MPI.COMM_WORLD):
+    def __init__(
+        self,
+        file,
+        path="/entry1/tomo_entry/data/data",
+        image_key_path="/entry1/tomo_entry/instrument/detector/image_key",
+        comm=MPI.COMM_WORLD,
+    ):
 
         self.file = file
         self.data_path = path
@@ -25,7 +26,9 @@ class Data:
             self.dataset = in_file[path]
             self.dataset_shape = self.dataset.shape
         self._comm = comm
-        self.data_indices = load_h5.get_data_indices(file, image_key_path=image_key_path, comm=comm)
+        self.data_indices = load_h5.get_data_indices(
+            file, image_key_path=image_key_path, comm=comm
+        )
         self.angles_degrees = load_h5.get_angles(file, comm=comm)
         self.angles_radians = np.deg2rad(self.angles_degrees[self.data_indices])
 
@@ -41,11 +44,16 @@ class Data:
             new_length = int(round(self.dataset_shape[1] * crop / 100))
             offset = int((self.dataset_shape[1] - new_length) / 2)
             preview[1] = f"{offset}: {offset + new_length}"
-            cropped_shape = (self.data_indices[-1] + 1 - self.data_indices[0], new_length, self.dataset_shape[2])
+            cropped_shape = (
+                self.data_indices[-1] + 1 - self.data_indices[0],
+                new_length,
+                self.dataset_shape[2],
+            )
         preview = ", ".join(preview)
-        data = load_h5.load_data(self.file, dim, self.data_path, comm=self._comm, preview=preview, pad=pad)
+        data = load_h5.load_data(
+            self.file, dim, self.data_path, comm=self._comm, preview=preview, pad=pad
+        )
         return data
-
 
     def get_darks_flats(self, dim, preview=None, crop=100, pad=0):
         if preview is None:
@@ -58,9 +66,19 @@ class Data:
             new_length = int(round(self.dataset_shape[1] * crop / 100))
             offset = int((self.dataset_shape[1] - new_length) / 2)
             preview[1] = f"{offset}: {offset + new_length}"
-            cropped_shape = (self.data_indices[-1] + 1 - self.data_indices[0], new_length, self.dataset_shape[2])
+            cropped_shape = (
+                self.data_indices[-1] + 1 - self.data_indices[0],
+                new_length,
+                self.dataset_shape[2],
+            )
         preview = ", ".join(preview)
-        darks, flats = load_h5.get_darks_flats(self.file, data_path=self.data_path,
-                                                         image_key_path=self.image_key_path, comm=self._comm,
-                                                         preview=preview, dim=dim, pad=pad)
+        darks, flats = load_h5.get_darks_flats(
+            self.file,
+            data_path=self.data_path,
+            image_key_path=self.image_key_path,
+            comm=self._comm,
+            preview=preview,
+            dim=dim,
+            pad=pad,
+        )
         return darks, flats
