@@ -7,7 +7,7 @@ from . import __version__
 @click.version_option(version=__version__, message="%(version)s")
 @click.pass_context
 def main(ctx: click.Context):
-    """The command line interface entry point.
+    """The command line interface entry point. Testing
 
     Args:
         ctx: The click context.

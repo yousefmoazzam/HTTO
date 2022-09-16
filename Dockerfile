@@ -1,37 +1,27 @@
+FROM continuumio/miniconda3 as conda_upstream
+
+RUN groupadd -r conda --gid 900 \
+    && chown -R :conda /opt/conda \
+    && chmod -R g+w /opt/conda \
+    && find /opt -type d | xargs -n 1 chmod g+s
+
 FROM registry.hub.docker.com/nvidia/cuda:11.7.1-devel-ubuntu20.04
+COPY --from=conda_upstream /opt /opt/
 
-ENV HTTO_DIR=/htto
-WORKDIR ${HTTO_DIR}
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    PATH=/opt/conda/bin:$PATH
+RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
+    && ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh \
+    && apt-get clean -y && rm -rf /var/lib/apt/lists/*
 
-ARG PYTHON_VERSION="3.10.7"
-
-RUN apt-get update -y \
-    && apt-get install -y \
-        build-essential \
-        libssl-dev \
-        libncurses5-dev \
-        libsqlite3-dev \
-        libreadline-dev \
-        libtk8.6 \
-        libgdm-dev \
-        libdb4o-cil-dev \
-        libpcap-dev \
-        wget \
-    && cd /tmp \
-    && wget https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz \
-    && tar -xzf Python-${PYTHON_VERSION}.tgz \
-    && cd Python-${PYTHON_VERSION} \
-    && ./configure --with-ensurepip --enable-optimizations --with-lto --enable-profiling \
-    && make install -j
-
-RUN apt-get update -y \
-    && apt-get install -y \
-        openmpi-bin \
-        libopenmpi-dev \
-        libhdf5-openmpi-dev
+COPY conda/environment_explicit.txt /tmp/conda-env/
+RUN umask 0002 \
+    && /opt/conda/bin/conda create -n htto --file /tmp/conda-env/environment_explicit.txt --no-default-packages \
+    && rm -rf /tmp/conda-env
 
 COPY . ${HTTO_DIR}
 
-RUN pip3 install . -r requirements.txt
+RUN /opt/conda/envs/htto/bin/python setup.py install
 
-ENTRYPOINT ["python3.10", "-m", "htto"]
+ENTRYPOINT /opt/conda/envs/htto/bin/python -m htto

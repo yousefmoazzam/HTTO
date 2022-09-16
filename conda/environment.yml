@@ -1,0 +1,11 @@
+name: htto
+dependencies:
+  - conda-forge::python
+  - conda-forge::click
+  - conda-forge::numpy
+  - conda-forge::mpi4py
+  - conda-forge::h5py
+  - conda-forge::cupy
+  - conda-forge::tomopy
+  - dkazanc::larix
+  - dkazanc::tomobar
