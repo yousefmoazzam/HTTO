@@ -6,6 +6,7 @@ dependencies:
   - conda-forge::mpi4py
   - conda-forge::h5py
   - conda-forge::cupy
+  - conda-forge::nvtx
   - conda-forge::tomopy
   - dkazanc::larix
   - dkazanc::tomobar
