@@ -1,5 +1,6 @@
 # Un-neccasary directories
 /.git
+/.github
 /pizdaint_utils
 
 # Byte-compiled / optimized / DLL files

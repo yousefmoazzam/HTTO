@@ -1,0 +1,62 @@
+name: Code CI
+
+on:
+  push:
+    branches:
+      # Restricting to these branches and tags stops duplicate jobs on internal
+      # PRs but stops CI running on internal branches without a PR. Delete the
+      # next 5 lines to restore the original behaviour
+      - master
+    tags:
+      - "*"
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["ubuntu-latest"]
+        python: ["3.8"]
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python }}
+      
+      - name: Add conda to system path
+        run: |
+          # $CONDA is an environment variable pointing to the root of the miniconda directory
+          echo $CONDA/bin >> $GITHUB_PATH
+
+      - name: Create conda environment
+        run: |
+          conda create -n htto --file conda/environment_explicit.txt --no-default-packages
+          conda run -n htto python setup.py develop
+
+      - name: Lint with black
+        run: |
+          conda install -n htto -y conda-forge::black
+          conda run -n htto black --check .
+
+      - name: Lint with flake8
+        run: |
+          conda install -n htto -y conda-forge::flake8
+          conda run -n htto flake8
+
+      - name: Lint with flake8
+        run: |
+          conda install -n htto -y conda-forge::mypy
+          conda run -n htto mypy src/ tests/
+
+      - name: Test with Pytest
+        run: |
+          conda install -n htto -y conda-forge::pytest conda-forge::pytest-cov
+          conda run -n htto pytest
