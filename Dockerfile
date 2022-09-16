@@ -12,6 +12,9 @@ ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     PATH=/opt/conda/bin:$PATH
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get install -y \
+        cuda-nsight-systems-11-7 \
+        cuda-nsight-compute-11-7 \
     && ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh \
     && apt-get clean -y && rm -rf /var/lib/apt/lists/*
 
@@ -24,4 +27,5 @@ COPY . ${HTTO_DIR}
 
 RUN /opt/conda/envs/htto/bin/python setup.py install
 
-ENTRYPOINT /opt/conda/envs/htto/bin/python -m htto
+ENTRYPOINT nsys profile \
+    /opt/conda/envs/htto/bin/python -m htto

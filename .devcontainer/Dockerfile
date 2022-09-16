@@ -15,6 +15,9 @@ ENV LANG=C.UTF-8 \
     PATH=/opt/conda/bin:$PATH
 ARG USERNAME=vscode
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get install -y \
+        cuda-nsight-systems-11-7 \
+        cuda-nsight-compute-11-7 \
     && /bin/bash /tmp/library-scripts/common-debian.sh \
     && mv -f "/tmp/library-scripts/meta.env" /usr/local/etc/vscode-dev-containers/meta.env \
     && ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh \
