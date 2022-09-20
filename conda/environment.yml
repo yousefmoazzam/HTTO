@@ -4,7 +4,7 @@ dependencies:
   - conda-forge::click
   - conda-forge::numpy
   - conda-forge::mpi4py
-  - conda-forge::h5py
+  - conda-forge::h5py=*=mpi*
   - conda-forge::cupy
   - conda-forge::nvtx
   - conda-forge::tomopy
