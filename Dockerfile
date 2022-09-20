@@ -20,13 +20,13 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
 
 COPY conda/environment.yml /tmp/conda-env/
 RUN umask 0002 \
-    && /opt/conda/bin/conda env create -n htto --file /tmp/conda-env/environment.yml --no-default-packages \
+    && conda env create -n htto --file /tmp/conda-env/environment.yml --no-default-packages \
     && rm -rf /tmp/conda-env
 
 COPY . ${HTTO_DIR}
 
-RUN conda -n htto run setup.py install
+RUN conda run -n htto python setup.py install
 
 ENTRYPOINT nsys profile \
-    conda -n htto \
+    conda run -n htto \
     python -m htto
