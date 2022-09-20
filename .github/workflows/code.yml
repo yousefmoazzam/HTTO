@@ -38,7 +38,7 @@ jobs:
 
       - name: Create conda environment
         run: |
-          conda create -n htto --file conda/environment_explicit.txt --no-default-packages
+          conda create -n htto --file conda/environment_explicit.txt --no-pin --no-default-packages
           conda run -n htto python setup.py develop
 
       - name: Lint with black
@@ -51,7 +51,7 @@ jobs:
           conda install -n htto -y conda-forge::flake8
           conda run -n htto flake8
 
-      - name: Lint with flake8
+      - name: Lint with mypy
         run: |
           conda install -n htto -y conda-forge::mypy
           conda run -n htto mypy src/ tests/
