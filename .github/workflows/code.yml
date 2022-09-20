@@ -38,7 +38,7 @@ jobs:
 
       - name: Create conda environment
         run: |
-          conda create -n htto --file conda/environment_explicit.txt --no-pin --no-default-packages
+          conda env create -n htto --file conda/environment.yml --no-default-packages
           conda run -n htto python setup.py develop
 
       - name: Lint with black
