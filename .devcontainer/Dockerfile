@@ -33,7 +33,7 @@ ENV PATH=${PATH}:${PIPX_BIN_DIR}
 RUN bash /tmp/library-scripts/python-debian.sh "none" "/opt/conda" "${PIPX_HOME}" "${USERNAME}" "true" \ 
     && apt-get clean -y && rm -rf /var/lib/apt/lists/* .devcontainer/library-scripts/python-debian.sh
 
-COPY conda/environment_explicit.txt /tmp/conda-env/
+COPY conda/environment.yml /tmp/conda-env/
 RUN umask 0002 \
-    && /opt/conda/bin/conda create -n htto --file /tmp/conda-env/environment_explicit.txt --no-default-packages \
+    && /opt/conda/bin/conda env create -n htto --file /tmp/conda-env/environment.yml --no-default-packages \
     && rm -rf /tmp/conda-env

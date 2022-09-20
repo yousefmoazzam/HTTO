@@ -18,14 +18,15 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh \
     && apt-get clean -y && rm -rf /var/lib/apt/lists/*
 
-COPY conda/environment_explicit.txt /tmp/conda-env/
+COPY conda/environment.yml /tmp/conda-env/
 RUN umask 0002 \
-    && /opt/conda/bin/conda create -n htto --file /tmp/conda-env/environment_explicit.txt --no-default-packages \
+    && /opt/conda/bin/conda env create -n htto --file /tmp/conda-env/environment.yml --no-default-packages \
     && rm -rf /tmp/conda-env
 
 COPY . ${HTTO_DIR}
 
-RUN /opt/conda/envs/htto/bin/python setup.py install
+RUN conda -n htto run setup.py install
 
 ENTRYPOINT nsys profile \
-    /opt/conda/envs/htto/bin/python -m htto
+    conda -n htto \
+    python -m htto
