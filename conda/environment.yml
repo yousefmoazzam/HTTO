@@ -1,4 +1,7 @@
 name: htto
+channels:
+  - conda-forge
+  - dkazanc
 dependencies:
   - conda-forge::python
   - conda-forge::click
