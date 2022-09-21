@@ -18,6 +18,5 @@ module load singularity
 
 singularity run $SCRATCH/htto_latest.sif \
     nsys profile \
-    conda run -n htto \
     mpirun -n 12 \
     python -m htto $@
