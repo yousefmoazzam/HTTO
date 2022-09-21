@@ -14,29 +14,6 @@ import h5py as h5
 from mpi4py import MPI
 
 
-def __option_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("in_file", help="Input data file.")
-    parser.add_argument(
-        "-p", "--path", default="/entry1/tomo_entry/data/data", help="Data path."
-    )
-    parser.add_argument(
-        "-c", "--csv", default=None, help="Write results to specified csv file."
-    )
-    parser.add_argument(
-        "-r", "--repeat", type=int, default=1, help="Number of repeats."
-    )
-    parser.add_argument(
-        "-s",
-        "--slicing",
-        type=list,
-        default=["p"],
-        help="Which slicing options to use (c, p, s, t).",
-    )
-    args = parser.parse_args()
-    return args
-
-
 def load_data(file, dim, path, preview=":,:,:", pad=(0, 0), comm=MPI.COMM_WORLD):
     """Load data in parallel, slicing it through a certain dimension. Returns a different block of data for each MPI
     process.
@@ -228,9 +205,7 @@ def get_pad_values(
     return pad0, pad1
 
 
-def read_chunks(file, path, comm):
-    rank = comm.rank
-    nproc = comm.size
+def get_num_chunks(file, path, comm):
     with h5.File(file, "r", driver="mpio", comm=comm) as in_file:
         dataset = in_file[path]
         shape = dataset.shape
@@ -253,34 +228,7 @@ def read_chunks(file, path, comm):
     nchunks = 1
     for dim in range(len(chunk_boundaries)):
         nchunks *= len(chunk_boundaries[dim]) - 1
-    chunk_slice_lists = [None for i in range(nchunks)]
 
-    # Create a slice list for each chunk from the chunk boundaries.
-    count = 0
-    for i in range(1, len(chunk_boundaries[0])):
-        for j in range(1, len(chunk_boundaries[1])):
-            for k in range(1, len(chunk_boundaries[2])):
-                chunk_slice_lists[count] = [
-                    slice(chunk_boundaries[0][i - 1], chunk_boundaries[0][i]),
-                    slice(chunk_boundaries[1][j - 1], chunk_boundaries[1][j]),
-                    slice(chunk_boundaries[2][k - 1], chunk_boundaries[2][k]),
-                ]
-                count += 1
-
-    # Splitting chunks between each process.
-    i0 = round((nchunks / nproc) * rank)
-    i1 = round((nchunks / nproc) * (rank + 1))
-
-    # Reading each chunk from the dataset using the slice lists.
-    with h5.File(file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
-        dataset = in_file[path]
-        for chunk_no in range(i0, i1):
-            proc_data = dataset[
-                chunk_slice_lists[chunk_no][0],  # slices 0th dimension
-                chunk_slice_lists[chunk_no][1],  # slices 1st dimension
-                chunk_slice_lists[chunk_no][2],
-            ]  # slices 2nd dimension
-            # to produce a 3d chunk
     return nchunks
 
 
