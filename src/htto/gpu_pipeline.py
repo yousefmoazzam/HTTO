@@ -57,7 +57,7 @@ def gpu_pipeline(
     with h5.File(in_file, "r", driver="mpio", comm=comm) as file:
         dataset = file[data_key]
         shape = dataset.shape
-    print_once(f"Dataset shape is {shape}")
+    print_once(f"Dataset shape is {shape}", comm)
     ###################################################################################
     #                                 Loading the data
     angles_degrees = load_h5.get_angles(in_file, comm=comm)
@@ -84,7 +84,7 @@ def gpu_pipeline(
         cropped_shape = (data_indices[-1] + 1 - data_indices[0], shape[1], shape[2])
     preview = ", ".join(preview)
 
-    print_once(f"Cropped data shape is {cropped_shape}")
+    print_once(f"Cropped data shape is {cropped_shape}", comm)
 
     load_time0 = MPI.Wtime()
     dim = dimension
@@ -96,13 +96,13 @@ def gpu_pipeline(
         preview=preview,
         comm=comm,
     )
-    print_rank(f"Pad values are {pad_values}.")
+    print_rank(f"Pad values are {pad_values}.", comm)
     data = load_h5.load_data(
         in_file, dim, data_key, preview=preview, pad=pad_values, comm=comm
     )
     load_time1 = MPI.Wtime()
     load_time = load_time1 - load_time0
-    print_once(f"Raw projection data loaded in {load_time} seconds")
+    print_once(f"Raw projection data loaded in {load_time} seconds", comm)
 
     darks, flats = load_h5.get_darks_flats(
         in_file,
@@ -115,7 +115,8 @@ def gpu_pipeline(
 
     (angles_total, detector_y, detector_x) = np.shape(data)
     print_rank(
-        f"Data shape is {(angles_total, detector_y, detector_x)} of type {data.dtype}"
+        f"Data shape is {(angles_total, detector_y, detector_x)} of type {data.dtype}",
+        comm,
     )
     ###################################################################################
     #                3D Median filter to apply to raw data/flats/darks
@@ -126,7 +127,7 @@ def gpu_pipeline(
     darks = MEDIAN_FILT_GPU(np.asarray(darks), kernel_size)
     median_time1 = MPI.Wtime()
     median_time = median_time1 - median_time0
-    print_once(f"Median filtering took {median_time} seconds")
+    print_once(f"Median filtering took {median_time} seconds", comm)
     if stop_after == PipelineStages.FILTER:
         # you might want to write the resulting volume here for testing/comparison with
         # CPU?
@@ -144,7 +145,7 @@ def gpu_pipeline(
     data_gpu[cp.isinf(data_gpu)] = 0
     norm_time1 = MPI.Wtime()
     norm_time = norm_time1 - norm_time0
-    print_once(f"Normalising the data and negative log took {norm_time} seconds")
+    print_once(f"Normalising the data and negative log took {norm_time} seconds", comm)
     if stop_after == PipelineStages.NORMALIZE:
         # you might want to write the resulting volume here for testing/comparison with
         # CPU?
@@ -165,7 +166,7 @@ def gpu_pipeline(
     data = data_gpu.get()
     stripes_time1 = MPI.Wtime()
     stripes_time = stripes_time1 - stripes_time0
-    print_once(f"Data unstriped in {stripes_time} seconds")
+    print_once(f"Data unstriped in {stripes_time} seconds", comm)
     if stop_after == PipelineStages.STRIPES:
         # you might want to write the resulting volume here for testing/comparison with
         # CPU?
@@ -183,7 +184,7 @@ def gpu_pipeline(
     rot_center = comm.bcast(rot_center, root=mid_rank)
     center_time1 = MPI.Wtime()
     center_time = center_time1 - center_time0
-    print_once(f"COR {rot_center} found in {center_time} seconds")
+    print_once(f"COR {rot_center} found in {center_time} seconds", comm)
     if stop_after == PipelineStages.CENTER:
         # you might want to write the resulting volume here for testing/comparison with
         # GPU?
@@ -217,7 +218,7 @@ def gpu_pipeline(
         )
         save_time1 = MPI.Wtime()
         save_time = save_time1 - save_time0
-        print_once(f"Intermediate data saved in {save_time} seconds")
+        print_once(f"Intermediate data saved in {save_time} seconds", comm)
 
         slicing_dim = 2  # assuming sinogram slicing here to get it loaded
         reload_time0 = MPI.Wtime()
@@ -227,7 +228,7 @@ def gpu_pipeline(
         dim = slicing_dim
         reload_time1 = MPI.Wtime()
         reload_time = reload_time1 - reload_time0
-        print_once(f"Data reloaded in {reload_time} seconds")
+        print_once(f"Data reloaded in {reload_time} seconds", comm)
     ###################################################################################
     #        Reconstruction with either Tomopy-ASTRA (2D) or ToMoBAR-ASTRA (3D)
     nNodes = 1  # change this when nNodes > 1
@@ -235,15 +236,15 @@ def gpu_pipeline(
     GPU_index_wr_to_rank = __calculate_GPU_index(nNodes, comm.rank, GPU_devicesNo)
 
     recon_time0 = MPI.Wtime()
-    print_once(f"Using CoR {rot_center}")
-    print_once(f"Number of GPUs = {GPU_devicesNo}")
+    print_once(f"Using CoR {rot_center}", comm)
+    print_once(f"Number of GPUs = {GPU_devicesNo}", comm)
 
     if GPU_devicesNo is not None or GPU_devicesNo > 0:
         data = concat_for_gpu(data, 2, GPU_devicesNo, comm)
         if data is not None:
             if reconstruction == Reconstors.TOMOPY:
                 # use Tomopy-ASTRA toolbox for reconstruction on a GPU
-                print_rank("GPU reconstruction.")
+                print_rank("GPU reconstruction.", comm)
                 opts = {}
                 opts["method"] = "FBP_CUDA"
                 opts["proj_type"] = "cuda"
@@ -274,14 +275,14 @@ def gpu_pipeline(
                     np.swapaxes(data, 0, 1)
                 )  # perform FBP as 3D BP with Astra and then filtering
         else:
-            print_rank("Waiting for GPU processes.")
+            print_rank("Waiting for GPU processes.", comm)
             recon = data
         recon = scatter_after_gpu(recon, 2, GPU_devicesNo, comm)
     else:
         raise Exception("There are no GPUs available for reconstruction")
     recon_time1 = MPI.Wtime()
     recon_time = recon_time1 - recon_time0
-    print_once(f"Data reconstructed in {recon_time} seconds")
+    print_once(f"Data reconstructed in {recon_time} seconds", comm)
     ###################################################################################
     #                     Saving the result of the reconstruction
     (vert_slices, recon_x, recon_y) = np.shape(recon)
@@ -293,12 +294,12 @@ def gpu_pipeline(
     )
     save_recon_time1 = MPI.Wtime()
     save_recon_time = save_recon_time1 - save_recon_time0
-    print_once(f"Reconstruction saved in {save_recon_time} seconds")
+    print_once(f"Reconstruction saved in {save_recon_time} seconds", comm)
     ###################################################################################
 
     total_time1 = MPI.Wtime()
     total_time = total_time1 - total_time0
-    print_once(f"Total time = {total_time} seconds.")
+    print_once(f"Total time = {total_time} seconds.", comm)
 
 
 def __calculate_GPU_index(nNodes, rank, GPU_devicesNo):

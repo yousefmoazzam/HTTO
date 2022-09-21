@@ -42,7 +42,7 @@ def cpu_pipeline(
     with h5.File(in_file, "r", driver="mpio", comm=comm) as file:
         dataset = file[data_key]
         shape = dataset.shape
-    print_once(f"Dataset shape is {shape}")
+    print_once(f"Dataset shape is {shape}", comm)
     ###################################################################################
     #                                 Loading the data
     angles_degrees = load_h5.get_angles(in_file, comm=comm)
@@ -69,7 +69,7 @@ def cpu_pipeline(
         cropped_shape = (data_indices[-1] + 1 - data_indices[0], shape[1], shape[2])
     preview = ", ".join(preview)
 
-    print_once(f"Cropped data shape is {cropped_shape}")
+    print_once(f"Cropped data shape is {cropped_shape}", comm)
 
     load_time0 = MPI.Wtime()
     dim = dimension
@@ -81,13 +81,13 @@ def cpu_pipeline(
         preview=preview,
         comm=comm,
     )
-    print_rank(f"Pad values are {pad_values}.")
+    print_rank(f"Pad values are {pad_values}.", comm)
     data = load_h5.load_data(
         in_file, dim, data_key, preview=preview, pad=pad_values, comm=comm
     )
     load_time1 = MPI.Wtime()
     load_time = load_time1 - load_time0
-    print_once(f"Raw projection data loaded in {load_time} seconds")
+    print_once(f"Raw projection data loaded in {load_time} seconds", comm)
 
     darks, flats = load_h5.get_darks_flats(
         in_file,
@@ -100,7 +100,8 @@ def cpu_pipeline(
 
     (angles_total, detector_y, detector_x) = np.shape(data)
     print_rank(
-        f"Data shape is {(angles_total, detector_y, detector_x)} of type {data.dtype}"
+        f"Data shape is {(angles_total, detector_y, detector_x)} of type {data.dtype}",
+        comm,
     )
     ###################################################################################
     #                3D Median filter to apply to raw data/flats/darks
@@ -111,7 +112,7 @@ def cpu_pipeline(
     darks = MEDIAN_FILT(np.asarray(darks), kernel_size, comm.size)
     median_time1 = MPI.Wtime()
     median_time = median_time1 - median_time0
-    print_once(f"Median filtering took {median_time} seconds")
+    print_once(f"Median filtering took {median_time} seconds", comm)
     if stop_after == PipelineStages.FILTER:
         # you might want to write the resulting volume here for testing/comparison with
         # GPU?
@@ -125,7 +126,7 @@ def cpu_pipeline(
     # data[data > 0.0] = -np.log(data[data > 0.0])
     norm_time1 = MPI.Wtime()
     norm_time = norm_time1 - norm_time0
-    print_once(f"Normalising the data and negative log took {norm_time} seconds")
+    print_once(f"Normalising the data and negative log took {norm_time} seconds", comm)
     if stop_after == PipelineStages.NORMALIZE:
         # you might want to write the resulting volume here for testing/comparison with
         # GPU?
@@ -138,7 +139,7 @@ def cpu_pipeline(
     )
     stripes_time1 = MPI.Wtime()
     stripes_time = stripes_time1 - stripes_time0
-    print_once(f"Data unstriped in {stripes_time} seconds")
+    print_once(f"Data unstriped in {stripes_time} seconds", comm)
     if stop_after == PipelineStages.STRIPES:
         # you might want to write the resulting volume here for testing/comparison with
         # GPU?
@@ -156,7 +157,7 @@ def cpu_pipeline(
     rot_center = comm.bcast(rot_center, root=mid_rank)
     center_time1 = MPI.Wtime()
     center_time = center_time1 - center_time0
-    print_once(f"COR {rot_center} found in {center_time} seconds")
+    print_once(f"COR {rot_center} found in {center_time} seconds", comm)
     if stop_after == PipelineStages.CENTER:
         # you might want to write the resulting volume here for testing/comparison with
         # GPU?
@@ -190,7 +191,7 @@ def cpu_pipeline(
         )
         save_time1 = MPI.Wtime()
         save_time = save_time1 - save_time0
-        print_once(f"Intermediate data saved in {save_time} seconds")
+        print_once(f"Intermediate data saved in {save_time} seconds", comm)
 
         slicing_dim = 2  # assuming sinogram slicing here to get it loaded
         reload_time0 = MPI.Wtime()
@@ -200,11 +201,11 @@ def cpu_pipeline(
         dim = slicing_dim
         reload_time1 = MPI.Wtime()
         reload_time = reload_time1 - reload_time0
-        print_once(f"Data reloaded in {reload_time} seconds")
+        print_once(f"Data reloaded in {reload_time} seconds", comm)
     ###################################################################################
     #                           Reconstruction with gridrec
     recon_time0 = MPI.Wtime()
-    print_once(f"Using CoR {rot_center}")
+    print_once(f"Using CoR {rot_center}", comm)
     recon = tomopy.recon(
         np.swapaxes(data, 0, 1),
         angles_radians,
@@ -215,7 +216,7 @@ def cpu_pipeline(
     )
     recon_time1 = MPI.Wtime()
     recon_time = recon_time1 - recon_time0
-    print_once(f"Data reconstructed in {recon_time} seconds")
+    print_once(f"Data reconstructed in {recon_time} seconds", comm)
     ###################################################################################
     #                     Saving the result of the reconstruction
     (vert_slices, recon_x, recon_y) = np.shape(recon)
@@ -227,8 +228,8 @@ def cpu_pipeline(
     )
     save_recon_time1 = MPI.Wtime()
     save_recon_time = save_recon_time1 - save_recon_time0
-    print_once(f"Reconstruction saved in {save_recon_time} seconds")
+    print_once(f"Reconstruction saved in {save_recon_time} seconds", comm)
     ####################################################################################
     total_time1 = MPI.Wtime()
     total_time = total_time1 - total_time0
-    print_once(f"Total time = {total_time} seconds.")
+    print_once(f"Total time = {total_time} seconds.", comm)

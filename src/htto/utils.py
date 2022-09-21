@@ -1,9 +1,9 @@
 from typing import Any
 
-from mpi4py.MPI import COMM_WORLD, Comm
+from mpi4py.MPI import Comm
 
 
-def print_once(output: Any, comm: Comm = COMM_WORLD):
+def print_once(output: Any, comm: Comm):
     """Print an output from rank zero only.
 
     Args:
@@ -14,7 +14,7 @@ def print_once(output: Any, comm: Comm = COMM_WORLD):
         print(output)
 
 
-def print_rank(output: Any, comm: Comm = COMM_WORLD):
+def print_rank(output: Any, comm: Comm):
     """Print an output with rank prefix.
 
     Args:
