@@ -7,13 +7,11 @@ Author: Jacob Williamson
 
 """
 
-from mpi4py import MPI
-import h5py as h5
 import argparse
 import math
-import pandas as pd
-import os
-from datetime import datetime
+
+import h5py as h5
+from mpi4py import MPI
 
 
 def __option_parser():
@@ -391,122 +389,3 @@ def get_slice_list_from_preview(preview):
         elif len(values) == 3:
             slice_list[dimension] = slice(new_values[0], new_values[1], new_values[2])
     return slice_list
-
-
-def main():
-    args = __option_parser()
-    rank = MPI.COMM_WORLD.rank
-    nproc = MPI.COMM_WORLD.size
-
-    filename = args.in_file.split("/")[-1]
-
-    with h5.File(args.in_file, "r", driver="mpio", comm=MPI.COMM_WORLD) as in_file:
-        size = in_file[args.path].size
-        chunks = in_file[args.path].chunks
-        shape = in_file[args.path].shape
-        compression = in_file[args.path].compression
-    if rank == 0:
-        print()
-        if args.repeat == 1:
-            print(f"Reading {filename}")
-        else:
-            print(f"Reading {filename} {args.repeat} times")
-        print(f"Number of processes: {nproc}")
-        print(f"Dataset size = {size}")
-        print(f"Dataset shape = {shape}")
-        print(f"Chunk size = {chunks}")
-        print(f"Compression = {compression}")
-        print()
-
-    times_dict = {
-        "file name": [None] * args.repeat,
-        "data path": [None] * args.repeat,
-        "nproc": [None] * args.repeat,
-        "size": [None] * args.repeat,
-        "shape": [None] * args.repeat,
-        "chunks": [None] * args.repeat,
-        "chunks time (s)": [None] * args.repeat,
-        "projections time (s)": [None] * args.repeat,
-        "sinograms time (s)": [None] * args.repeat,
-        "tangentograms time (s)": [None] * args.repeat,
-        "date/time": [None] * args.repeat,
-    }
-
-    for repeat in range(args.repeat):
-
-        # Reading chunks
-        MPI.COMM_WORLD.Barrier()
-        if chunks is not None and "c" in args.include:
-            tstart_c = MPI.Wtime()
-            nchunks = read_chunks(args.in_file, args.path, MPI.COMM_WORLD)
-            tstop_c = MPI.Wtime()
-            time_c = tstop_c - tstart_c
-            if rank == 0:
-                print(f"{nchunks} chunks read in {time_c} seconds.")
-        else:
-            time_c = None
-
-        # Reading along the 1st dimension (projections)
-        MPI.COMM_WORLD.Barrier()
-        if "p" in args.include:
-            tstart_p = MPI.Wtime()
-            read_through_dim1(args.in_file, args.path, MPI.COMM_WORLD)
-            tstop_p = MPI.Wtime()
-            time_p = tstop_p - tstart_p
-            if rank == 0:
-                print(f"{shape[0]} projections read in {time_p} seconds.")
-        else:
-            time_p = None
-
-        # Reading along the 2nd dimension (sinograms)
-        MPI.COMM_WORLD.Barrier()
-        if "s" in args.include:
-            tstart_s = MPI.Wtime()
-            read_through_dim2(args.in_file, args.path, MPI.COMM_WORLD)
-            tstop_s = MPI.Wtime()
-            time_s = tstop_s - tstart_s
-            if rank == 0:
-                print(f"{shape[1]} sinograms read in {time_s} seconds.")
-        else:
-            time_s = None
-
-        # Reading along the 3rd dimension (tangentograms)
-        MPI.COMM_WORLD.Barrier()
-        if "t" in args.include:
-            tstart_t = MPI.Wtime()
-            read_through_dim3(args.in_file, args.path, MPI.COMM_WORLD)
-            tstop_t = MPI.Wtime()
-            time_t = tstop_t - tstart_t
-            if rank == 0:
-                print(f"{shape[2]} tangentograms read in {time_t} seconds.")
-        else:
-            time_t = None
-
-        # Recording results in a dictionary
-        times_dict["file name"][repeat] = filename
-        times_dict["data path"][repeat] = args.path
-        times_dict["nproc"][repeat] = nproc
-        times_dict["size"][repeat] = size
-        times_dict["shape"][repeat] = str(shape)
-        times_dict["chunks"][repeat] = str(chunks)
-        times_dict["chunks time (s)"][repeat] = time_c
-        times_dict["projections time (s)"][repeat] = time_p
-        times_dict["sinograms time (s)"][repeat] = time_s
-        times_dict["tangentograms time (s)"][repeat] = time_t
-        times_dict["date/time"][repeat] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-
-        if rank == 0:
-            print()
-
-    # Writing results to csv file if option used
-    csv_path = args.csv
-    if rank == 0:
-        if csv_path is not None:
-            times_df = pd.DataFrame(times_dict)
-            times_df.to_csv(csv_path, mode="a", header=not os.path.exists(csv_path))
-            print(f"Output written to {csv_path}")
-            print()
-
-
-if __name__ == "__main__":
-    main()
