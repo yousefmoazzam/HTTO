@@ -26,7 +26,3 @@ RUN umask 0002 \
 COPY . ${HTTO_DIR}
 
 RUN conda run -n htto python setup.py install
-
-ENTRYPOINT nsys profile \
-    conda run -n htto \
-    python -m htto
