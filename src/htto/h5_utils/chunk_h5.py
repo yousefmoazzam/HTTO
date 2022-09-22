@@ -12,14 +12,17 @@ def save_dataset(
     comm=MPI.COMM_WORLD,
 ):
     """Save dataset in parallel.
-    :param out_folder: Path to output folder.
-    :param file_name: Name of file to save dataset in.
-    :param data: Data to save to file.
-    :param slice_dim: Where data has been parallelized (split into blocks, each of which is given to an MPI process),
-        provide the dimension along which the data was sliced so it can be pieced together again.
-    :param chunks: Specify how the data should be chunked when saved.
-    :param path: Path to dataset within the file.
-    :param comm: MPI communicator object.
+
+    Args:
+        out_folder: Path to output folder.
+        file_name: Name of file to save dataset in.
+        data: Data to save to file.
+        slice_dim: Where data has been parallelized (split into blocks, each of which
+            is given to an MPI process), provide the dimension along which the data was
+            sliced so it can be pieced together again.
+        chunks: Specify how the data should be chunked when saved.
+        path: Path to dataset within the file.
+        comm: MPI communicator object.
     """
     shape = get_data_shape(data, slice_dim - 1, comm)
     dtype = data.dtype
@@ -35,11 +38,14 @@ def save_data_parallel(
     comm=MPI.COMM_WORLD,
 ):
     """Save data to dataset in parallel.
-    :param dataset: Dataset to save data to.
-    :param data: Data to save to dataset.
-    :param slice_dim: Where data has been parallelized (split into blocks, each of which is given to an MPI process),
-        provide the dimension along which the data was sliced so it can be pieced together again.
-    :param comm: MPI communicator object.
+
+    Args:
+        dataset: Dataset to save data to.
+        data: Data to save to dataset.
+        slice_dim: Where data has been parallelized (split into blocks, each of which
+            is given to an MPI process), provide the dimension along which the data was
+            sliced so it can be pieced together again.
+        comm: MPI communicator object.
     """
     rank = comm.rank
     nproc = comm.size
@@ -55,6 +61,13 @@ def save_data_parallel(
 
 
 def get_data_shape(data, dim, comm=MPI.COMM_WORLD):
+    """Gets the shape of a distributed dataset.
+
+    Args:
+        data: The process data.
+        dim: The dimension in which to get the shape.
+        comm: The MPI communicator.
+    """
     shape = list(data.shape)
     lengths = comm.gather(shape[dim], 0)
     lengths = comm.bcast(lengths, 0)
