@@ -58,7 +58,7 @@ class GlobalOptions:
 @click.option(
     "--stop_after",
     type=click.Choice(PipelineStages._member_names_, False),
-    callback=lambda c, p, v: PipelineStages[str(v).capitalize()]
+    callback=lambda c, p, v: PipelineStages[str(v).upper()]
     if v is not None
     else PipelineStages.RECONSTRUCT,
     help="Stop after the specified stage.",
@@ -103,13 +103,13 @@ def cpu(global_options: GlobalOptions):
 @click.option(
     "--reconstruction",
     type=click.Choice(PipelineStages._member_names_, False),
-    callback=lambda c, p, v: Reconstors[str(v).capitalize()]
+    callback=lambda c, p, v: Reconstors[str(v).upper()]
     if v is not None
     else Reconstors.TOMOPY,
     help="The reconstruction method to be used.",
 )
 @click.pass_obj
-def gpu(global_options: GlobalOptions, reconstuction: Reconstors):
+def gpu(global_options: GlobalOptions, reconstruction: Reconstors):
     """Perform reconstruction using the GPU accelerated pipeline."""
     gpu_pipeline(
         global_options.in_file,
@@ -119,5 +119,5 @@ def gpu(global_options: GlobalOptions, reconstuction: Reconstors):
         global_options.crop,
         global_options.pad,
         global_options.stop_after,
-        reconstuction,
+        reconstruction,
     )

@@ -28,4 +28,4 @@ COPY . ${HTTO_DIR}
 
 RUN conda run -n htto python setup.py install
 
-ENTRYPOINT conda run -n htto
+ENTRYPOINT ["conda", "run", "-n", "htto"]
