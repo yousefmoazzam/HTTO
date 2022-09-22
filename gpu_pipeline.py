@@ -17,6 +17,7 @@ import h5_utils.chunk_h5 as chunk_h5
 import cupy as cp
 from tomobar.methodsDIR import RecToolsDIR
 from larix.methods.misc_gpu import MEDIAN_FILT_GPU
+from methods.rotation import find_center_vo_gpu
 
 
 def __option_parser():
@@ -141,19 +142,20 @@ def main():
             # you might want to write the resulting volume here for testing/comparison with CPU?
             sys.exit()  
         ##########################################################################################################
-        #                                Calculating the center of rotation (CPU so far)
+        #                                Calculating the center of rotation
         center_time0 = MPI.Wtime()
         rot_center = 0
         mid_rank = int(round(comm_size / 2) + 0.1)
         if rank == mid_rank:
             mid_slice = int(np.size(data, 1) / 2)
-            rot_center = tomopy.find_center_vo(data[:, mid_slice, :], step=0.5, ncore=args.ncore)
+            rot_center = find_center_vo_gpu(data_gpu[:, mid_slice, :], step=0.5)
+        rot_center = rot_center.get()
         rot_center = comm.bcast(rot_center, root=mid_rank)
         center_time1 = MPI.Wtime()
         center_time = center_time1 - center_time0
         print_once(f"COR {rot_center} found in {center_time} seconds")
         if args.methods == 4:
-            # you might want to write the resulting volume here for testing/comparison with GPU?
+            # you might want to write the resulting volume here for testing/comparison with CPU?
             sys.exit()
         ##########################################################################################################
         #                              Saving/reloading the intermediate dataset      
