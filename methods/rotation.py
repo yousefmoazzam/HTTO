@@ -24,7 +24,12 @@ def find_center_vo_gpu(sino, ind=None, smin=-50, smax=50, srad=6, step=0.25,
     if _sino.shape[0] * _sino.shape[1] > 4e6:
         # data is large, so downsample it before performing search for
         # centre of rotation
-        pass
+        _sino_coarse = downsample(
+            cp.expand_dims(_sino_cs, 1), 2, 2)[:, 0, :]
+        init_cen = _search_coarse(_sino_coarse, smin / 4.0, smax / 4.0, ratio,
+                                  drop)
+        fine_cen = _search_fine(_sino_fs, srad, step, init_cen * 4.0, ratio,
+                                drop)
     else:
         init_cen = _search_coarse(_sino_cs, smin, smax, ratio, drop)
         fine_cen = _search_fine(_sino_fs, srad, step, init_cen, ratio, drop)
@@ -184,3 +189,74 @@ def _calculate_metric(shift_col, sino1, sino2, sino3, mask):
     )
 
     return cp.asarray([metric], dtype='float32')
+
+
+def downsample(sino, level, axis):
+    sino = cp.asarray(sino, dtype='float32')
+    dx, dy, dz = sino.shape
+    # Determine the new size, dim, of the downsampled dimension
+    dim = int(sino.shape[axis] / cp.power(2, level))
+    shape = [dx, dy, dz]
+    shape[axis] = dim
+    downsampled_data = cp.zeros(shape, dtype='float32')
+
+    downsample_sino_kernel = cp.RawKernel(r'''
+    extern "C" __global__
+    void downsample_sino(float* sino, int dx, int dy, int dz, int level,
+                         float* out) {
+        // use shared memory to store the values used to "merge" columns of the
+        // sinogram in the downsampling process
+        extern __shared__ float downsampled_vals[];
+
+        unsigned int binsize, i, j, k, orig_ind, out_ind, output_bin_no;
+        i = blockDim.x * blockIdx.x + threadIdx.x;
+        j = 0;
+        k = blockDim.y * blockIdx.y + threadIdx.y;
+        orig_ind = (k * dz) + i;
+
+        binsize = __float2uint_rd(
+            powf(__uint2float_rd(2), level));
+        unsigned int dz_downsampled = __float2uint_rd(
+            fdividef(__uint2float_rd(dz), __uint2float_rd(binsize)));
+        unsigned int i_downsampled = __float2uint_rd(
+            fdividef(__uint2float_rd(i), __uint2float_rd(binsize)));
+
+        if (orig_ind < dx * dz) {
+            output_bin_no =  __float2uint_rd(
+                fdividef(__uint2float_rd(i), __uint2float_rd(binsize))
+            );
+
+            out_ind = (k * dz_downsampled) + i_downsampled;
+            downsampled_vals[threadIdx.y * 8 + threadIdx.x] = sino[orig_ind] / __uint2float_rd(binsize);
+            // synchronise threads within thread-block so that it's guaranteed
+            // that all the required values have been copied into shared memeory
+            // to then sum and save in the downsampled output
+            __syncthreads();
+
+            // arbitrarily use the "beginning thread" in each "lot" of pixels
+            // for downsampling to then save the desired value in the
+            // downsampled output array
+            if (i % 4 == 0) {
+                out[out_ind] = downsampled_vals[threadIdx.y * 8 + threadIdx.x] +
+                    downsampled_vals[threadIdx.y * 8 + threadIdx.x + 1] +
+                    downsampled_vals[threadIdx.y * 8 + threadIdx.x + 2] +
+                    downsampled_vals[threadIdx.y * 8 + threadIdx.x + 3];
+            }
+        }
+    }
+    ''', 'downsample_sino')
+
+    block_x = 8
+    block_y = 8
+    block_dims = (block_x, block_y)
+    grid_x = int(cp.ceil(sino.shape[2]/block_x))
+    grid_y = int(cp.ceil(sino.shape[0]/block_y))
+    grid_dims = (grid_x, grid_y)
+    # 8x8 thread-block, which means 16 "lots" of columns to downsample per
+    # thread-block; 4 bytes per float, so allocate 16*6 = 64 bytes of shared
+    # memeory per thread-block
+    shared_mem_bytes = 64
+    params = (sino, dx, dy, dz, level, downsampled_data)
+    downsample_sino_kernel(grid_dims, block_dims, params,
+                           shared_mem=shared_mem_bytes)
+    return downsampled_data
