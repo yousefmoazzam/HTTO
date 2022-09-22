@@ -16,7 +16,7 @@ export XDG_RUNTIME_DIR=$SCRATCH/runtime_dir
 module load daint-gpu
 module load singularity
 
-singularity run $SCRATCH/htto_latest.sif \
+singularity run --nv $SCRATCH/htto_latest.sif \
     nsys profile \
     mpirun -n 12 \
     python -m htto $@
