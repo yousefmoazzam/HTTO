@@ -3,7 +3,7 @@ package:
   version: "0.1"
 
 source:
-        path: ..
+  path: ..
 
 requirements:
   build:
@@ -12,6 +12,7 @@ requirements:
 build:
   preserve_egg_dir: True
   number: 0
+  script: python setup.py install
 
 about:
   home: https://github.com/dkazanc/HTTO
