@@ -109,7 +109,7 @@ def cpu(global_options: GlobalOptions):
     help="The reconstruction method to be used.",
 )
 @click.pass_obj
-def gpu(global_options: GlobalOptions, reconstuction: Reconstors):
+def gpu(global_options: GlobalOptions, reconstruction: Reconstors):
     """Perform reconstruction using the GPU accelerated pipeline."""
     gpu_pipeline(
         global_options.in_file,
@@ -119,5 +119,5 @@ def gpu(global_options: GlobalOptions, reconstuction: Reconstors):
         global_options.crop,
         global_options.pad,
         global_options.stop_after,
-        reconstuction,
+        reconstruction,
     )
