@@ -13,6 +13,7 @@ ENV LANG=C.UTF-8 \
     PATH=/opt/conda/bin:$PATH
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get install -y \
+        git \
         cuda-nsight-systems-11-7 \
         cuda-nsight-compute-11-7 \
     && ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh \
