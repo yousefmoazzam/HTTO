@@ -18,6 +18,7 @@ from htto.common import PipelineStages
 from htto.utils import print_once, print_rank
 
 from .h5_utils import chunk_h5, load_h5
+from .methods.rotation import find_center_vo_gpu
 
 
 @unique
@@ -191,16 +192,16 @@ def gpu_pipeline(
         mid_rank = int(round(comm.size / 2) + 0.1)
         if comm.rank == mid_rank:
             mid_slice = int(np.size(data, 1) / 2)
-            rot_center = tomopy.find_center_vo(
-                data[:, mid_slice, :], step=0.5, ncore=comm.size
-            )
+            rot_center = find_center_vo_gpu(data_gpu[:, mid_slice, :],
+                                            step=0.5)
+        rot_center = rot_center.get()
         rot_center = comm.bcast(rot_center, root=mid_rank)
         center_time1 = MPI.Wtime()
         center_time = center_time1 - center_time0
         print_once(f"COR {rot_center} found in {center_time} seconds", comm)
     if stop_after == PipelineStages.CENTER:
         # you might want to write the resulting volume here for testing/comparison with
-        # GPU?
+        # CPU?
         sys.exit()
     ###################################################################################
     #                    Saving/reloading the intermediate dataset
