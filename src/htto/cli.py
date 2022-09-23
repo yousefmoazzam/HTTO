@@ -5,7 +5,7 @@ import click
 
 from htto.common import PipelineTasks
 from htto.cpu_pipeline import cpu_pipeline
-from htto.gpu_pipeline import Reconstors, gpu_pipeline
+from htto.gpu_pipeline import gpu_pipeline
 
 from ._version_git import __version__
 
@@ -60,7 +60,7 @@ class GlobalOptions:
     type=click.Choice(PipelineTasks._member_names_, False),
     callback=lambda c, p, v: PipelineTasks[str(v).upper()]
     if v is not None
-    else PipelineTasks.RECONSTRUCT,
+    else PipelineTasks.SAVE,
     help="Stop after the specified stage.",
 )
 @click.version_option(version=__version__, message="%(version)s")
@@ -100,16 +100,8 @@ def cpu(global_options: GlobalOptions):
 
 
 @main.command()
-@click.option(
-    "--reconstruction",
-    type=click.Choice(PipelineTasks._member_names_, False),
-    callback=lambda c, p, v: Reconstors[str(v).upper()]
-    if v is not None
-    else Reconstors.TOMOPY,
-    help="The reconstruction method to be used.",
-)
 @click.pass_obj
-def gpu(global_options: GlobalOptions, reconstruction: Reconstors):
+def gpu(global_options: GlobalOptions):
     """Perform reconstruction using the GPU accelerated pipeline."""
     gpu_pipeline(
         global_options.in_file,
@@ -119,5 +111,4 @@ def gpu(global_options: GlobalOptions, reconstruction: Reconstors):
         global_options.crop,
         global_options.pad,
         global_options.stop_after,
-        reconstruction,
     )
