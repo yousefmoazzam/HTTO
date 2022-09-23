@@ -2,7 +2,7 @@ from enum import IntEnum, unique
 
 
 @unique
-class PipelineStages(IntEnum):
+class PipelineTasks(IntEnum):
     """An enumeration of available pipeline stages."""
 
     LOAD = 0

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import click
 
-from htto.common import PipelineStages
+from htto.common import PipelineTasks
 from htto.cpu_pipeline import cpu_pipeline
 from htto.gpu_pipeline import Reconstors, gpu_pipeline
 
@@ -20,7 +20,7 @@ class GlobalOptions:
     dimension: int
     crop: int
     pad: int
-    stop_after: PipelineStages
+    stop_after: PipelineTasks
 
 
 @click.group(invoke_without_command=True)
@@ -57,10 +57,10 @@ class GlobalOptions:
 )
 @click.option(
     "--stop_after",
-    type=click.Choice(PipelineStages._member_names_, False),
-    callback=lambda c, p, v: PipelineStages[str(v).upper()]
+    type=click.Choice(PipelineTasks._member_names_, False),
+    callback=lambda c, p, v: PipelineTasks[str(v).upper()]
     if v is not None
-    else PipelineStages.RECONSTRUCT,
+    else PipelineTasks.RECONSTRUCT,
     help="Stop after the specified stage.",
 )
 @click.version_option(version=__version__, message="%(version)s")
@@ -73,7 +73,7 @@ def main(
     dimension: int,
     crop: int,
     pad: int,
-    stop_after: PipelineStages,
+    stop_after: PipelineTasks,
 ):
     """HTTO: High Throughput TOmography."""
     ctx.obj = GlobalOptions(
@@ -102,7 +102,7 @@ def cpu(global_options: GlobalOptions):
 @main.command()
 @click.option(
     "--reconstruction",
-    type=click.Choice(PipelineStages._member_names_, False),
+    type=click.Choice(PipelineTasks._member_names_, False),
     callback=lambda c, p, v: Reconstors[str(v).upper()]
     if v is not None
     else Reconstors.TOMOPY,
