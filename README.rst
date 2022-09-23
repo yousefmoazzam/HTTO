@@ -18,8 +18,7 @@ Using Conda
 -----------
 
 * Clone the repository from GitHub using :code:`git clone git@github.com:dkazanc/HTTO.git`
-* Install dependencies from the environment file (slow) :code:`conda env create htto --file conda/environment.yml`
-  Or use the pre-computed explicit dependencies (fast): :code:`conda create --name htto --file conda/environment_explicit.txt`
+* Install dependencies from the environment file :code:`conda env create htto --file conda/environment.yml`
 * Activate the environment with :code:`conda activate htto`
 * Install the enviroment in development mode with :code:`python setup.py develop`
 
@@ -49,4 +48,4 @@ In a Container
 
 * Build the container as described in Building the Container
 * Run the container with :code:`docker run htto <args>`
-* For help with the command line interface simply execute :code:`docker run htto --help`
+* For help with the command line interface simply execute :code:`docker run htto python -m htto --help`
