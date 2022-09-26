@@ -46,7 +46,7 @@ def gpu_pipeline(
     if comm.rank == 0:
         mkdir(run_out_dir)
     num_GPUs = cupy.cuda.runtime.getDeviceCount()
-    use_GPU = comm.rank / comm.size * num_GPUs
+    use_GPU = int(comm.rank / comm.size * num_GPUs)
     cupy.cuda.Device(use_GPU).use()
 
     ###################################################################################
