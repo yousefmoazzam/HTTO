@@ -18,7 +18,7 @@ module load singularity
 
 mkdir -p reports/$SLURM_JOB_ID
 
-srun \
-    singularity run --nv --bind /scratch/snx3000/ $SCRATCH/htto_latest.sif \
-    nsys profile --output reports/$SLURM_JOB_ID/report%p.qdstrm \
+singularity run --nv --bind /scratch/snx3000/ $SCRATCH/htto_latest.sif \
+    mpirun -n $SLURM_NTASKS \
+    nsys profile --output $SLURM_JOB_ID/%p.qdstrm \
     python -m htto $@
