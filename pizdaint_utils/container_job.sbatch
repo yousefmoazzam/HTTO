@@ -16,9 +16,7 @@ export XDG_RUNTIME_DIR=$SCRATCH/runtime_dir
 module load daint-gpu
 module load singularity
 
-mkdir -p reports/$SLURM_JOB_ID
-
 singularity run --nv --bind /scratch/snx3000/ $SCRATCH/htto_latest.sif \
+    nsys profile --output reports/$SLURM_JOB_ID.qdstrm \
     mpirun -n $SLURM_NTASKS \
-    nsys profile --output $SLURM_JOB_ID/%p.qdstrm \
     python -m htto $@
