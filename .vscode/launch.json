@@ -5,6 +5,34 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "HTTO CPU",
+            "type": "python",
+            "request": "launch",
+            "module": "htto",
+            "args": [
+                "--crop",
+                "1",
+                "/dls/i12/data/2022/cm31132-2/rawdata/110809.nxs",
+                "results",
+                "cpu"
+            ],
+            "justMyCode": true
+        },
+        {
+            "name": "HTTO GPU",
+            "type": "python",
+            "request": "launch",
+            "module": "htto",
+            "args": [
+                "--crop",
+                "1",
+                "/dls/i12/data/2022/cm31132-2/rawdata/110809.nxs",
+                "results",
+                "gpu"
+            ],
+            "justMyCode": true
+        },
+        {
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",
