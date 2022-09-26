@@ -1,9 +1,12 @@
-from cupy import ndarray
+import cupy
 from tomopy import astra, recon
 
 
 def reconstruct(
-    data: ndarray, angles_radians: ndarray, rot_center: float, use_GPU: int
+    data: cupy.ndarray,
+    angles_radians: cupy.ndarray,
+    rot_center: cupy.ndarray,
+    use_GPU: int,
 ):
     """Perform a reconstruction using tomopy's astra recon function.
 
@@ -16,6 +19,10 @@ def reconstruct(
     Returns:
         ndarray: A numpy array containing the reconstructed volume.
     """
+    data = cupy.asnumpy(data)
+    angles_radians = cupy.asnumpy(angles_radians)
+    rot_center = cupy.asnumpy(rot_center)
+
     return recon(
         data,
         angles_radians,
