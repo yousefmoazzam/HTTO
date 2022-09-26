@@ -25,7 +25,8 @@
 		"ms-python.python",
 		"ms-python.vscode-pylance",
 		"ryanluker.vscode-coverage-gutters",
-		"tamasfe.even-better-toml"
+		"tamasfe.even-better-toml",
+		"h5web.vscode-h5web"
 	],
 	"features": {
 		"git": "os-provided"
