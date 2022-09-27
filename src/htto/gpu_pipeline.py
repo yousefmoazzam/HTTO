@@ -53,20 +53,14 @@ def gpu_pipeline(
     #                                 Loading the data
     with annotate(PipelineTasks.LOAD.name, color="blue"):
         with annotate("I/O", color="green"):
-            (
-                data,
-                flats,
-                darks,
-                angles_radians,
-                angles_total,
-                detector_y,
-                detector_x,
-            ) = load_data(in_file, data_key, dimension, crop, pad, comm)
+            (data, flats, darks, angles) = load_data(
+                in_file, data_key, dimension, crop, pad, comm
+            )
         with annotate("TO DEVICE", color="green"):
             data = cupy.asarray(data)
             flats = cupy.asarray(flats)
             darks = cupy.asarray(darks)
-            angles_radians = cupy.asarray(angles_radians)
+            angles = cupy.asarray(angles)
     if stop_after == PipelineTasks.LOAD:
         sys.exit()
     ###################################################################################
@@ -99,9 +93,7 @@ def gpu_pipeline(
         with annotate("FROM DEVICE", color="green"):
             data = cupy.asnumpy(data)
         with annotate("I/O", color="green"):
-            data, dimension = reslice(
-                data, run_out_dir, dimension, angles_total, detector_y, detector_x, comm
-            )
+            data, dimension = reslice(data, run_out_dir, dimension, len(angles), comm)
         with annotate("TO DEVICE", color="green"):
             data = cupy.asarray(data)
     if stop_after == PipelineTasks.RESLICE:
@@ -109,7 +101,7 @@ def gpu_pipeline(
     ###################################################################################
     #        Reconstruction with either Tomopy-ASTRA (2D) or ToMoBAR-ASTRA (3D)
     with annotate(PipelineTasks.RECONSTRUCT.name, color="blue"):
-        recon = reconstruct(data, angles_radians, rot_center, use_GPU)
+        recon = reconstruct(data, angles, rot_center, use_GPU)
 
     if stop_after == PipelineTasks.RECONSTRUCT:
         sys.exit()

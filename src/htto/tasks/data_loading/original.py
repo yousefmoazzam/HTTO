@@ -10,7 +10,7 @@ from htto.utils import print_once, print_rank
 
 def load_data(
     in_file: Path, data_key: str, dimension: int, crop: int, pad: int, comm: Comm
-) -> tuple[ndarray, ndarray, ndarray, ndarray, int, int, int]:
+) -> tuple[ndarray, ndarray, ndarray, ndarray]:
     with File(in_file, "r", driver="mpio", comm=comm) as file:
         dataset = file[data_key]
         shape = dataset.shape
@@ -22,7 +22,7 @@ def load_data(
         image_key_path="/entry1/tomo_entry/instrument/detector/image_key",
         comm=comm,
     )
-    angles_radians = deg2rad(angles_degrees[data_indices])
+    angles = deg2rad(angles_degrees[data_indices])
 
     # preview to prepare to crop the data from the middle when --crop is used to
     # avoid loading the whole volume and crop out darks and flats when loading data.
@@ -74,4 +74,4 @@ def load_data(
         comm,
     )
 
-    return data, flats, darks, angles_radians, angles_total, detector_y, detector_x
+    return data, flats, darks, angles
