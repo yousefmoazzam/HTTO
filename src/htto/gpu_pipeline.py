@@ -51,70 +51,69 @@ def gpu_pipeline(
 
     ###################################################################################
     #                                 Loading the data
-    with annotate(PipelineTasks.LOAD.name):
-        (
-            data,
-            flats,
-            darks,
-            angles_radians,
-            angles_total,
-            detector_y,
-            detector_x,
-        ) = load_data(in_file, data_key, dimension, crop, pad, comm)
+    with annotate(PipelineTasks.LOAD.name, color="blue"):
+        with annotate("I/O", color="green"):
+            (
+                data,
+                flats,
+                darks,
+                angles_radians,
+                angles_total,
+                detector_y,
+                detector_x,
+            ) = load_data(in_file, data_key, dimension, crop, pad, comm)
+        with annotate("TO DEVICE", color="green"):
+            data = cupy.asarray(data)
+            flats = cupy.asarray(flats)
+            darks = cupy.asarray(darks)
+            angles_radians = cupy.asarray(angles_radians)
     if stop_after == PipelineTasks.LOAD:
         sys.exit()
-
-    with annotate("TO DEVICE"):
-        data = cupy.asarray(data)
-        flats = cupy.asarray(flats)
-        darks = cupy.asarray(darks)
-        angles_radians = cupy.asarray(angles_radians)
     ###################################################################################
     #                3D Median filter to apply to raw data/flats/darks
-    with annotate(PipelineTasks.FILTER.name):
+    with annotate(PipelineTasks.FILTER.name, color="blue"):
         data, flats, darks = filter_data(data, flats, darks)
     if stop_after == PipelineTasks.FILTER:
         sys.exit()
     ###################################################################################
     #                 Normalising the data and taking the negative log
-    with annotate(PipelineTasks.NORMALIZE.name):
+    with annotate(PipelineTasks.NORMALIZE.name, color="blue"):
         data = normalize_data(data, darks, flats)
     if stop_after == PipelineTasks.NORMALIZE:
         sys.exit()
     ###################################################################################
     #                                 Removing stripes
-    with annotate(PipelineTasks.STRIPES.name):
+    with annotate(PipelineTasks.STRIPES.name, color="blue"):
         data = remove_stripes(data)
     if stop_after == PipelineTasks.STRIPES:
         sys.exit()
     ###################################################################################
     #                        Calculating the center of rotation
-    with annotate(PipelineTasks.CENTER.name):
+    with annotate(PipelineTasks.CENTER.name, color="blue"):
         rot_center = find_center_of_rotation(data)
     if stop_after == PipelineTasks.CENTER:
         sys.exit()
     ###################################################################################
     #                    Saving/reloading the intermediate dataset
-    with annotate("FROM DEVICE"):
-        data = cupy.asnumpy(data)
-
-    with annotate(PipelineTasks.RESLICE.name):
-        data, dimension = reslice(
-            data, run_out_dir, dimension, angles_total, detector_y, detector_x, comm
-        )
+    with annotate(PipelineTasks.RESLICE.name, color="blue"):
+        with annotate("FROM DEVICE", color="green"):
+            data = cupy.asnumpy(data)
+        with annotate("I/O", color="green"):
+            data, dimension = reslice(
+                data, run_out_dir, dimension, angles_total, detector_y, detector_x, comm
+            )
+        with annotate("TO DEVICE", color="green"):
+            data = cupy.asarray(data)
     if stop_after == PipelineTasks.RESLICE:
         sys.exit()
-
-    with annotate("TO DEVICE"):
-        data = cupy.asarray(data)
     ###################################################################################
     #        Reconstruction with either Tomopy-ASTRA (2D) or ToMoBAR-ASTRA (3D)
-    with annotate(PipelineTasks.RECONSTRUCT.name):
+    with annotate(PipelineTasks.RECONSTRUCT.name, color="blue"):
         recon = reconstruct(data, angles_radians, rot_center, use_GPU)
 
     if stop_after == PipelineTasks.RECONSTRUCT:
         sys.exit()
     ###################################################################################
     #                     Saving the result of the reconstruction
-    with annotate(PipelineTasks.SAVE.name):
+    with annotate(PipelineTasks.SAVE.name, color="blue"):
         save_data(recon, run_out_dir, comm)
