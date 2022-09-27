@@ -13,10 +13,10 @@ def find_center_of_rotation(data: cupy.ndarray) -> float:
     Returns:
         float: The center of rotation.
     """
-    return find_center_vo_gpu(data)
+    return _find_center_vo_gpu(data)
 
 
-def find_center_vo_gpu(
+def _find_center_vo_gpu(
     sino: cupy.ndarray,
     ind: Optional[int] = None,
     smin: int = -50,
@@ -46,7 +46,7 @@ def find_center_vo_gpu(
     if _sino.shape[0] * _sino.shape[1] > 4e6:
         # data is large, so downsample it before performing search for
         # centre of rotation
-        _sino_coarse = downsample(cupy.expand_dims(_sino_cs, 1), 2, 2)[:, 0, :]
+        _sino_coarse = _downsample(cupy.expand_dims(_sino_cs, 1), 2, 2)[:, 0, :]
         init_cen = _search_coarse(_sino_coarse, smin / 4.0, smax / 4.0, ratio, drop)
         fine_cen = _search_fine(_sino_fs, srad, step, init_cen * 4.0, ratio, drop)
     else:
@@ -221,17 +221,8 @@ def _calculate_metric(shift_col, sino1, sino2, sino3, mask):
     return cupy.asarray([metric], dtype="float32")
 
 
-def downsample(sino, level, axis):
-    sino = cupy.asarray(sino, dtype="float32")
-    dx, dy, dz = sino.shape
-    # Determine the new size, dim, of the downsampled dimension
-    dim = int(sino.shape[axis] / cupy.power(2, level))
-    shape = [dx, dy, dz]
-    shape[axis] = dim
-    downsampled_data = cupy.zeros(shape, dtype="float32")
-
-    downsample_sino_kernel = cupy.RawKernel(
-        r"""
+DOWNSAMPLE_SINO_KERNEL = cupy.RawKernel(
+    r"""
     extern "C" __global__
     void downsample_sino(float* sino, int dx, int dy, int dz, int level,
                          float* out) {
@@ -276,8 +267,18 @@ def downsample(sino, level, axis):
         }
     }
     """,
-        "downsample_sino",
-    )
+    "downsample_sino",
+)
+
+
+def _downsample(sino, level, axis):
+    sino = cupy.asarray(sino, dtype="float32")
+    dx, dy, dz = sino.shape
+    # Determine the new size, dim, of the downsampled dimension
+    dim = int(sino.shape[axis] / cupy.power(2, level))
+    shape = [dx, dy, dz]
+    shape[axis] = dim
+    downsampled_data = cupy.zeros(shape, dtype="float32")
 
     block_x = 8
     block_y = 8
@@ -290,5 +291,5 @@ def downsample(sino, level, axis):
     # memeory per thread-block
     shared_mem_bytes = 64
     params = (sino, dx, dy, dz, level, downsampled_data)
-    downsample_sino_kernel(grid_dims, block_dims, params, shared_mem=shared_mem_bytes)
+    DOWNSAMPLE_SINO_KERNEL(grid_dims, block_dims, params, shared_mem=shared_mem_bytes)
     return downsampled_data
