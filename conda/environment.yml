@@ -8,6 +8,7 @@ dependencies:
   - conda-forge::click
   - conda-forge::cupy
   - conda-forge::h5py[build=*openmpi*]
+  - conda-forge::hdf5plugin
   - conda-forge::mpi4py
   - conda-forge::numpy
   - conda-forge::nvtx
