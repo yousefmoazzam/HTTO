@@ -1,6 +1,6 @@
 #!/bin/bash -l
 #SBATCH --job-name vusa
-#SBATCH --time 01:00:00
+#SBATCH --time 00:10:00
 #SBATCH --nodes 1
 #SBATCH --ntasks-per-core 1
 #SBATCH --ntasks-per-node 12
