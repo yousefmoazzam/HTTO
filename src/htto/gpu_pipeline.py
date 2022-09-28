@@ -1,6 +1,5 @@
 import sys
 from datetime import datetime
-from math import prod
 from os import mkdir
 from pathlib import Path
 
@@ -22,6 +21,7 @@ from htto.tasks.reconstruction.tomopy_gpu import reconstruct
 from htto.tasks.reslice.original import reslice
 from htto.tasks.saving.original import save_data
 from htto.tasks.stripe_removal.original_gpu import remove_stripes
+from htto.tasks.to_device.mpi_gatherv import to_device
 
 
 def gpu_pipeline(
@@ -87,28 +87,7 @@ def gpu_pipeline(
                 )
         print(f"{proc_id} Loaded projections of shape: {cpu_data.shape}.")
         with annotate("HOSTS TO DEVICE", color="green"):
-            gpu_num_projections = gpu_comm.gather(len(cpu_data), 0)
-            data = (
-                cupy.empty(
-                    (sum(gpu_num_projections), *cpu_data.shape[1:]),
-                    dtype=cpu_data.dtype,
-                )
-                if gpu_comm.rank == 0
-                else None
-            )
-            gpu_comm.Gatherv(
-                cpu_data,
-                (
-                    data,
-                    [
-                        num_projections * prod(cpu_data.shape[1:])
-                        for num_projections in gpu_num_projections
-                    ],
-                )
-                if data is not None
-                else None,
-                0,
-            )
+            data = to_device(cpu_data, 0, gpu_comm, 0)
     if comm.rank == gpu_rank:
         with annotate("HOST TO DEVICE", color="green"):
             flats = cupy.asarray(host_flats)
