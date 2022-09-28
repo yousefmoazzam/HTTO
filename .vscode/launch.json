@@ -12,7 +12,7 @@
             "args": [
                 "--crop",
                 "1",
-                "/dls/i12/data/2022/cm31132-2/rawdata/110809.nxs",
+                "/dls/tmp/cscs-hackathon-data/1-percent/110809.nxs",
                 "results",
                 "cpu"
             ],
@@ -26,7 +26,7 @@
             "args": [
                 "--crop",
                 "1",
-                "/dls/i12/data/2022/cm31132-2/rawdata/110809.nxs",
+                "/dls/tmp/cscs-hackathon-data/1-percent/110809.nxs",
                 "results",
                 "gpu"
             ],
