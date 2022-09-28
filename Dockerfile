@@ -10,7 +10,8 @@ COPY --from=conda_upstream /opt /opt/
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
-    PATH=/opt/conda/bin:$PATH
+    PATH=/opt/conda/bin:$PATH \
+    OMPI_MCA_opal_cuda_support=true
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get install -y \
         git \
