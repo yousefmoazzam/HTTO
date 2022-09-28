@@ -34,12 +34,17 @@
 	"workspaceMount": "src=${localWorkspaceFolder},dst=/workspace,type=bind",
 	"workspaceFolder": "/workspace",
 	"mounts": [
-		"src=/dls/i12/data/2022/cm31132-2/rawdata/,dst=/dls/i12/data/2022/cm31132-2/rawdata/,type=bind"
+		"src=/dls/tmp/cscs-hackathon-data/,dst=/dls/tmp/cscs-hackathon-data/,type=bind"
 	],
 	"runArgs": [
 		"--privileged",
 		"--net=host",
 		"--pid=host"
 	],
-	"postCreateCommand": "/opt/conda/envs/htto/bin/python setup.py develop"
+	"postCreateCommand": "/opt/conda/envs/htto/bin/python setup.py develop",
+	"containerEnv": {
+		"OMPI_ALLOW_RUN_AS_ROOT": "1",
+		"OMPI_ALLOW_RUN_AS_ROOT_CONFIRM": "1",
+		"OMPI_MCA_opal_cuda_support": "true"
+	}
 }
