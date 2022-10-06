@@ -74,4 +74,4 @@ def load_data(
         comm,
     )
 
-    return data, flats, darks, angles
+    return data, flats, darks, angles, angles_total, detector_y, detector_x

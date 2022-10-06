@@ -11,6 +11,8 @@ def reslice(
     run_out_dir: Path,
     dimension: int,
     num_angles: int,
+    detector_y: int,
+    detector_x: int,
     comm: Comm,
 ) -> tuple[numpy.ndarray, int]:
     """Reslice data by writing to hdf5 store and reading back.
@@ -29,7 +31,6 @@ def reslice(
             dimension along which it is now sliced.
     """
     # calculate the chunk size for the projection data
-    (detector_y, detector_x) = data.shape[-2:]
     slices_no_in_chunks = 4
     if dimension == 1:
         chunks_data = (slices_no_in_chunks, detector_y, detector_x)
