@@ -9,12 +9,7 @@ from nvtx import annotate
 
 from htto.common import PipelineTasks
 from htto.tasks.centering.original_gpu import find_center_of_rotation
-from htto.tasks.data_loading.garry import (
-    ProjectionTypes,
-    load_data,
-    load_projections,
-    load_projections_distributed,
-)
+from htto.tasks.data_loading.original import load_data
 from htto.tasks.filtering.original_gpu import filter_data
 from htto.tasks.normalization.original_gpu import normalize_data
 from htto.tasks.reconstruction.tomopy_gpu import reconstruct
@@ -53,7 +48,6 @@ def gpu_pipeline(
         mkdir(run_out_dir)
     num_GPUs = cupy.cuda.runtime.getDeviceCount()
     gpu_id = int(comm.rank / comm.size * num_GPUs)
-    gpu_rank = gpu_id * num_GPUs
     gpu_comm = comm.Split(gpu_id)
     proc_id = f"[{gpu_id}:{gpu_comm.rank}]"
     cupy.cuda.Device(gpu_id).use()
@@ -61,91 +55,73 @@ def gpu_pipeline(
     ###################################################################################
     #                                 Loading the data
     with annotate(PipelineTasks.LOAD.name, color="blue"):
+        (
+            data,
+            host_flats,
+            host_darks,
+            host_angles,
+            angles_total,
+            detector_y,
+            detector_x,
+        ) = load_data(in_file, data_key, dimension, crop, pad, comm)
+    with annotate("HOST TO DEVICE", color="green"):
+        flats = cupy.asarray(host_flats)
+        darks = cupy.asarray(host_darks)
+        angles = cupy.asarray(host_angles)
+    if stop_after == PipelineTasks.LOAD:
+        sys.exit()
+    ###############################################################################
+    #              3D Median filter to apply to raw data/flats/darks
+    with annotate(PipelineTasks.FILTER.name, color="blue"):
+        data, flats, darks = filter_data(data, flats, darks)
+    print(f"{proc_id} Finished {PipelineTasks.FILTER.name}")
+    if stop_after == PipelineTasks.FILTER:
+        sys.exit()
+    ###############################################################################
+    #               Normalising the data and taking the negative log
+    with annotate(PipelineTasks.NORMALIZE.name, color="blue"):
+        data = normalize_data(data, darks, flats)
+    print(f"{proc_id} Finished {PipelineTasks.NORMALIZE.name}")
+    if stop_after == PipelineTasks.NORMALIZE:
+        sys.exit()
+    ###############################################################################
+    #                               Removing stripes
+    with annotate(PipelineTasks.STRIPES.name, color="blue"):
+        data = remove_stripes(data)
+    print(f"{proc_id} Finished {PipelineTasks.STRIPES.name}")
+    if stop_after == PipelineTasks.STRIPES:
+        sys.exit()
+    ###############################################################################
+    #                      Calculating the center of rotation
+    with annotate(PipelineTasks.CENTER.name, color="blue"):
+        rot_center = find_center_of_rotation(data)
+    print(f"{proc_id} Finished {PipelineTasks.CENTER.name}")
+    if stop_after == PipelineTasks.CENTER:
+        sys.exit()
+    ###############################################################################
+    #                  Saving/reloading the intermediate dataset
+    with annotate(PipelineTasks.RESLICE.name, color="blue"):
+        with annotate("FROM DEVICE", color="green"):
+            data = cupy.asnumpy(data)
         with annotate("I/O", color="green"):
-            cpu_data = load_projections_distributed(
-                in_file,
-                ProjectionTypes.DATA,
-                data_key,
-                "/entry1/tomo_entry/instrument/detector/image_key",
-                comm,
+            data, dimension = reslice(
+                data, run_out_dir, dimension, len(angles), detector_y,
+                detector_x, comm
             )
-            if gpu_comm.rank == 0:
-                host_flats = load_projections(
-                    in_file,
-                    ProjectionTypes.FLAT,
-                    data_key,
-                    "/entry1/tomo_entry/instrument/detector/image_key",
-                )
-                host_darks = load_projections(
-                    in_file,
-                    ProjectionTypes.DARK,
-                    data_key,
-                    "/entry1/tomo_entry/instrument/detector/image_key",
-                )
-                host_angles = load_data(
-                    in_file, "/entry1/tomo_entry/data/rotation_angle"
-                )
-        print(f"{proc_id} Loaded projections of shape: {cpu_data.shape}.")
-        with annotate("HOSTS TO DEVICE", color="green"):
-            data = to_device(cpu_data, 0, gpu_comm, 0)
-    if comm.rank == gpu_rank:
-        with annotate("HOST TO DEVICE", color="green"):
-            flats = cupy.asarray(host_flats)
-            darks = cupy.asarray(host_darks)
-            angles = cupy.asarray(host_angles)
-        if stop_after == PipelineTasks.LOAD:
-            sys.exit()
-        ###############################################################################
-        #              3D Median filter to apply to raw data/flats/darks
-        with annotate(PipelineTasks.FILTER.name, color="blue"):
-            data, flats, darks = filter_data(data, flats, darks)
-        print(f"{proc_id} Finished {PipelineTasks.FILTER.name}")
-        if stop_after == PipelineTasks.FILTER:
-            sys.exit()
-        ###############################################################################
-        #               Normalising the data and taking the negative log
-        with annotate(PipelineTasks.NORMALIZE.name, color="blue"):
-            data = normalize_data(data, darks, flats)
-        print(f"{proc_id} Finished {PipelineTasks.NORMALIZE.name}")
-        if stop_after == PipelineTasks.NORMALIZE:
-            sys.exit()
-        ###############################################################################
-        #                               Removing stripes
-        with annotate(PipelineTasks.STRIPES.name, color="blue"):
-            data = remove_stripes(data)
-        print(f"{proc_id} Finished {PipelineTasks.STRIPES.name}")
-        if stop_after == PipelineTasks.STRIPES:
-            sys.exit()
-        ###############################################################################
-        #                      Calculating the center of rotation
-        with annotate(PipelineTasks.CENTER.name, color="blue"):
-            rot_center = find_center_of_rotation(data)
-        print(f"{proc_id} Finished {PipelineTasks.CENTER.name}")
-        if stop_after == PipelineTasks.CENTER:
-            sys.exit()
-        ###############################################################################
-        #                  Saving/reloading the intermediate dataset
-        with annotate(PipelineTasks.RESLICE.name, color="blue"):
-            with annotate("FROM DEVICE", color="green"):
-                data = cupy.asnumpy(data)
-            with annotate("I/O", color="green"):
-                data, dimension = reslice(
-                    data, run_out_dir, dimension, len(angles), comm
-                )
-            with annotate("TO DEVICE", color="green"):
-                data = cupy.asarray(data)
-        print(f"{proc_id} Finished {PipelineTasks.RESLICE.name}")
-        if stop_after == PipelineTasks.RESLICE:
-            sys.exit()
-        ###############################################################################
-        #      Reconstruction with either Tomopy-ASTRA (2D) or ToMoBAR-ASTRA (3D)
-        with annotate(PipelineTasks.RECONSTRUCT.name, color="blue"):
-            recon = reconstruct(data, angles, rot_center, gpu_id)
-        print(f"{proc_id} Finished {PipelineTasks.RECONSTRUCT.name}")
-        if stop_after == PipelineTasks.RECONSTRUCT:
-            sys.exit()
-        ###############################################################################
-        #                   Saving the result of the reconstruction
-        with annotate(PipelineTasks.SAVE.name, color="blue"):
-            save_data(recon, run_out_dir, comm)
-        print(f"{proc_id} Finished {PipelineTasks.SAVE.name}")
+        with annotate("TO DEVICE", color="green"):
+            data = cupy.asarray(data)
+    print(f"{proc_id} Finished {PipelineTasks.RESLICE.name}")
+    if stop_after == PipelineTasks.RESLICE:
+        sys.exit()
+    ###############################################################################
+    #      Reconstruction with either Tomopy-ASTRA (2D) or ToMoBAR-ASTRA (3D)
+    with annotate(PipelineTasks.RECONSTRUCT.name, color="blue"):
+        recon = reconstruct(data, angles, rot_center, gpu_id)
+    print(f"{proc_id} Finished {PipelineTasks.RECONSTRUCT.name}")
+    if stop_after == PipelineTasks.RECONSTRUCT:
+        sys.exit()
+    ###############################################################################
+    #                   Saving the result of the reconstruction
+    with annotate(PipelineTasks.SAVE.name, color="blue"):
+        save_data(recon, run_out_dir, comm)
+    print(f"{proc_id} Finished {PipelineTasks.SAVE.name}")
